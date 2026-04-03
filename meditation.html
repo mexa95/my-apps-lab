@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meditation Timer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0e11;
+      --surface: #13161b;
+      --border: #1e222a;
+      --text: #d4cfc8;
+      --dim: #5e5a52;
+      --gold: #c4a265;
+      --gold-soft: rgba(196, 162, 101, 0.1);
+      --gold-glow: rgba(196, 162, 101, 0.06);
+      --warm: #2a2520;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Subtle radial glow */
+    body::before {
+      content: '';
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, var(--gold-glow) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 420px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 36px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+    }
+
+    .header h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 2rem;
+      letter-spacing: 2px;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+
+    .header p {
+      font-size: 0.8rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+    }
+
+    /* Timer circle */
+    .timer-wrap {
+      position: relative;
+      width: 260px;
+      height: 260px;
+    }
+
+    .timer-ring {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 3;
+    }
+
+    .ring-progress {
+      fill: none;
+      stroke: var(--gold);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 753;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s linear;
+      filter: drop-shadow(0 0 6px rgba(196, 162, 101, 0.3));
+    }
+
+    .timer-inner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .timer-display {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 3.8rem;
+      color: var(--text);
+      letter-spacing: 3px;
+      line-height: 1;
+    }
+
+    .timer-label {
+      font-size: 0.7rem;
+      color: var(--dim);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    /* Breathing dot */
+    .breath-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--gold);
+      border-radius: 50%;
+      margin-top: 12px;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .breath-dot.active {
+      opacity: 1;
+      animation: breathe 4s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(2.2); opacity: 1; }
+    }
+
+    /* Duration selector */
+    .durations {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .dur-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--dim);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      letter-spacing: 0.5px;
+    }
+
+    .dur-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .dur-btn.selected {
+      background: var(--gold-soft);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    /* Custom input */
+    .custom-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .custom-row.show {
+      max-height: 60px;
+      opacity: 1;
+    }
+
+    .custom-input {
+      width: 80px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      padding: 10px 14px;
+      border-radius: 8px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .custom-input:focus {
+      border-color: var(--gold);
+    }
+
+    .custom-label {
+      font-size: 0.8rem;
+      color: var(--dim);
+    }
+
+    /* Main button */
+    .start-btn {
+      appearance: none;
+      border: 1px solid var(--gold);
+      background: transparent;
+      color: var(--gold);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 400;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      padding: 16px 52px;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .start-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--gold);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: -1;
+    }
+
+    .start-btn:hover::before { opacity: 0.08; }
+
+    .start-btn:hover {
+      box-shadow: 0 0 30px rgba(196, 162, 101, 0.12);
+    }
+
+    .start-btn:active { transform: scale(0.97); }
+
+    /* Gong button */
+    .gong-btn {
+      appearance: none;
+      border: none;
+      background: none;
+      color: var(--dim);
+      font-size: 0.75rem;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      padding: 8px;
+      transition: color 0.2s ease;
+    }
+
+    .gong-btn:hover { color: var(--gold); }
+
+    /* States */
+    .hidden { display: none !important; }
+
+    /* Completion screen */
+    .complete-msg {
+      text-align: center;
+      animation: fadeIn 1s ease-out;
+    }
+
+    .complete-msg h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 1.8rem;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+
+    .complete-msg p {
+      color: var(--dim);
+      font-size: 0.85rem;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Fade for entire app */
+    .app { animation: fadeIn 0.8s ease-out; }
+
+    @media (max-width: 440px) {
+      .timer-wrap { width: 220px; height: 220px; }
+      .timer-display { font-size: 3rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Meditation</h1>
+      <p>Sit still. Breathe. Be here now.</p>
+    </div>
+
+    <div class="timer-wrap">
+      <svg class="timer-ring" viewBox="0 0 260 260">
+        <circle class="ring-bg" cx="130" cy="130" r="120" />
+        <circle class="ring-progress" id="progress" cx="130" cy="130" r="120" />
+      </svg>
+      <div class="timer-inner">
+        <div class="timer-display" id="display">5:00</div>
+        <div class="timer-label" id="label">choose your time</div>
+        <div class="breath-dot" id="breathDot"></div>
+      </div>
+    </div>
+
+    <div id="controls">
+      <div class="durations">
+        <button class="dur-btn selected" data-min="5">5 min</button>
+        <button class="dur-btn" data-min="10">10 min</button>
+        <button class="dur-btn" data-min="15">15 min</button>
+        <button class="dur-btn" data-min="custom" id="customBtn">Custom</button>
+      </div>
+
+      <div class="custom-row" id="customRow">
+        <input type="number" class="custom-input" id="customInput" min="1" max="120" value="20" placeholder="min">
+        <span class="custom-label">minutes</span>
+      </div>
+    </div>
+
+    <button class="start-btn" id="startBtn">Begin</button>
+
+    <div class="complete-msg hidden" id="completeMsg">
+      <h2>Session Complete</h2>
+      <p id="completeDuration"></p>
+    </div>
+
+    <button class="gong-btn" id="gongTest">&#x1F514; test gong</button>
+  </div>
+
+  <script>
+    // --- Web Audio API Gong ---
+    let audioCtx = null;
+
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playGong(type = 'start') {
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+
+      // Gong is built from layered sine tones with slow decay
+      const frequencies = type === 'end'
+        ? [110, 165, 220, 330, 440] // richer for end
+        : [130, 195, 260]; // simpler for start
+
+      const duration = type === 'end' ? 6 : 4;
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0, now);
+      masterGain.gain.linearRampToValueAtTime(type === 'end' ? 0.5 : 0.35, now + 0.02);
+      masterGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      masterGain.connect(ctx.destination);
+
+      frequencies.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        // Slight detune for richness
+        osc.detune.setValueAtTime(Math.random() * 6 - 3, now);
+        gain.gain.setValueAtTime(0.4 / (i + 1), now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration - 0.5);
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + duration);
+      });
+
+      // Add a low rumble
+      const noise = ctx.createOscillator();
+      const noiseGain = ctx.createGain();
+      noise.type = 'triangle';
+      noise.frequency.setValueAtTime(55, now);
+      noiseGain.gain.setValueAtTime(0.15, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      noise.connect(noiseGain);
+      noiseGain.connect(masterGain);
+      noise.start(now);
+      noise.stop(now + duration);
+
+      // Metallic shimmer
+      const shimmer = ctx.createOscillator();
+      const shimmerGain = ctx.createGain();
+      shimmer.type = 'sine';
+      shimmer.frequency.setValueAtTime(880, now);
+      shimmerGain.gain.setValueAtTime(0.05, now);
+      shimmerGain.gain.exponentialRampToValueAtTime(0.001, now + 2);
+      shimmer.connect(shimmerGain);
+      shimmerGain.connect(masterGain);
+      shimmer.start(now);
+      shimmer.stop(now + duration);
+    }
+
+    // --- Timer Logic ---
+    const display = document.getElementById('display');
+    const label = document.getElementById('label');
+    const progress = document.getElementById('progress');
+    const startBtn = document.getElementById('startBtn');
+    const controls = document.getElementById('controls');
+    const breathDot = document.getElementById('breathDot');
+    const customRow = document.getElementById('customRow');
+    const customInput = document.getElementById('customInput');
+    const customBtn = document.getElementById('customBtn');
+    const completeMsg = document.getElementById('completeMsg');
+    const completeDuration = document.getElementById('completeDuration');
+    const gongTest = document.getElementById('gongTest');
+
+    const CIRCUMFERENCE = 2 * Math.PI * 120; // ~753
+    progress.style.strokeDasharray = CIRCUMFERENCE;
+    progress.style.strokeDashoffset = 0;
+
+    let selectedMinutes = 5;
+    let totalSeconds = 0;
+    let remainingSeconds = 0;
+    let timerInterval = null;
+    let isRunning = false;
+    let isPaused = false;
+
+    // Duration buttons
+    document.querySelectorAll('.dur-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (isRunning) return;
+        document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+
+        const val = btn.dataset.min;
+        if (val === 'custom') {
+          customRow.classList.add('show');
+          selectedMinutes = parseInt(customInput.value) || 5;
+        } else {
+          customRow.classList.remove('show');
+          selectedMinutes = parseInt(val);
+        }
+        updateDisplay(selectedMinutes * 60);
+      });
+    });
+
+    customInput.addEventListener('input', () => {
+      let v = parseInt(customInput.value);
+      if (v > 120) { customInput.value = 120; v = 120; }
+      if (v < 1) v = 1;
+      selectedMinutes = v || 1;
+      updateDisplay(selectedMinutes * 60);
+    });
+
+    function updateDisplay(secs) {
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      display.textContent = `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateProgress(remaining, total) {
+      const fraction = remaining / total;
+      progress.style.strokeDashoffset = CIRCUMFERENCE * (1 - fraction);
+    }
+
+    // Start / Pause / Resume
+    startBtn.addEventListener('click', () => {
+      if (!isRunning) {
+        startTimer();
+      } else if (isPaused) {
+        resumeTimer();
+      } else {
+        pauseTimer();
+      }
+    });
+
+    function startTimer() {
+      // If coming back from complete state
+      completeMsg.classList.add('hidden');
+      controls.classList.remove('hidden');
+
+      if (customRow.classList.contains('show')) {
+        selectedMinutes = parseInt(customInput.value) || 5;
+      }
+
+      totalSeconds = selectedMinutes * 60;
+      remainingSeconds = totalSeconds;
+      isRunning = true;
+      isPaused = false;
+
+      startBtn.textContent = 'Pause';
+      label.textContent = 'breathing';
+      breathDot.classList.add('active');
+      controls.style.opacity = '0.3';
+      controls.style.pointerEvents = 'none';
+      gongTest.classList.add('hidden');
+
+      playGong('start');
+      updateDisplay(remainingSeconds);
+      updateProgress(remainingSeconds, totalSeconds);
+
+      timerInterval = setInterval(() => {
+        remainingSeconds--;
+        updateDisplay(remainingSeconds);
+        updateProgress(remainingSeconds, totalSeconds);
+
+        if (remainingSeconds <= 0) {
+          endTimer();
+        }
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      isPaused = true;
+      clearInterval(timerInterval);
+      startBtn.textContent = 'Resume';
+      label.textContent = 'paused';
+      breathDot.classList.remove('active');
+    }
+
+    function resumeTimer() {
+      isPaused = false;
+      startBtn.textContent = 'Pause';
+      label.textContent = 'breathing';
+      breathDot.classList.add('active');
+
+      timerInterval = setInterval(() => {
+        remainingSeconds--;
+        updateDisplay(remainingSeconds);
+        updateProgress(remainingSeconds, totalSeconds);
+
+        if (remainingSeconds <= 0) {
+          endTimer();
+        }
+      }, 1000);
+    }
+
+    function endTimer() {
+      clearInterval(timerInterval);
+      isRunning = false;
+      isPaused = false;
+
+      // Triple gong at end
+      playGong('end');
+      setTimeout(() => playGong('end'), 1800);
+      setTimeout(() => playGong('end'), 3600);
+
+      breathDot.classList.remove('active');
+      label.textContent = 'complete';
+      startBtn.textContent = 'Again';
+      controls.style.opacity = '1';
+      controls.style.pointerEvents = 'auto';
+      gongTest.classList.remove('hidden');
+
+      // Show completion
+      controls.classList.add('hidden');
+      completeMsg.classList.remove('hidden');
+      completeDuration.textContent = `${selectedMinutes} minute${selectedMinutes > 1 ? 's' : ''} of stillness`;
+
+      updateDisplay(0);
+      updateProgress(0, totalSeconds);
+
+      // Reset for next session
+      startBtn.addEventListener('click', function resetOnce() {
+        completeMsg.classList.add('hidden');
+        controls.classList.remove('hidden');
+        progress.style.strokeDashoffset = 0;
+        updateDisplay(selectedMinutes * 60);
+        label.textContent = 'choose your time';
+        startBtn.textContent = 'Begin';
+        startBtn.removeEventListener('click', resetOnce);
+      }, { once: true });
+    }
+
+    // Test gong
+    gongTest.addEventListener('click', () => playGong('end'));
+
+    // Init
+    updateDisplay(selectedMinutes * 60);
+  </script>
+</body>
+</html>
