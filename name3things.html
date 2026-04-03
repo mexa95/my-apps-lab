@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Name 3 Things</title>
+  <link href="https://fonts.googleapis.com/css2?family=Anybody:wght@400;700;900&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0d12;
+      --surface: #16161f;
+      --border: #222233;
+      --text: #f0f0f5;
+      --dim: #6e6e88;
+      --c1: #ff3c6f;
+      --c2: #ffe14d;
+      --c3: #4de8ff;
+      --c4: #a78bfa;
+      --c5: #34d399;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Animated background blobs */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.12;
+      animation: drift 12s ease-in-out infinite alternate;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .blob-1 { width: 500px; height: 500px; background: var(--c1); top: -150px; left: -100px; }
+    .blob-2 { width: 400px; height: 400px; background: var(--c3); bottom: -100px; right: -80px; animation-delay: -4s; }
+    .blob-3 { width: 300px; height: 300px; background: var(--c4); top: 50%; left: 60%; animation-delay: -8s; }
+
+    @keyframes drift {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(40px, -30px) scale(1.15); }
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 560px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+    }
+
+    /* Logo / Header */
+    .header {
+      text-align: center;
+    }
+
+    .logo {
+      font-family: 'Anybody', sans-serif;
+      font-weight: 900;
+      font-size: clamp(2.4rem, 7vw, 3.6rem);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .logo .three {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--c1), var(--c2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: pop 0.4s ease-out;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+    }
+
+    /* Category pill */
+    .category {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2.5px;
+      padding: 6px 16px;
+      border-radius: 100px;
+      transition: all 0.4s ease;
+    }
+
+    /* Question card */
+    .card-wrapper {
+      width: 100%;
+      perspective: 800px;
+    }
+
+    .card {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px 32px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      box-shadow: 0 0 60px rgba(255, 60, 111, 0.06);
+    }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 20px 20px 0 0;
+      transition: background 0.4s ease;
+    }
+
+    .question-text {
+      font-family: 'Anybody', sans-serif;
+      font-weight: 700;
+      font-size: clamp(1.3rem, 4vw, 1.7rem);
+      line-height: 1.35;
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .question-text.animating {
+      animation: swapIn 0.45s ease-out;
+    }
+
+    @keyframes swapIn {
+      0% { opacity: 0; transform: translateY(20px) scale(0.96); filter: blur(4px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.8); }
+      60% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    /* Three dots indicator */
+    .dots {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 24px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: all 0.3s ease;
+    }
+
+    /* Button */
+    .btn {
+      appearance: none;
+      border: none;
+      background: linear-gradient(135deg, var(--c1), #ff6b3c);
+      color: white;
+      font-family: 'Anybody', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      padding: 18px 48px;
+      border-radius: 14px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:hover {
+      transform: scale(1.04);
+      box-shadow: 0 8px 30px rgba(255, 60, 111, 0.3);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    /* Counter */
+    .counter {
+      font-size: 0.8rem;
+      color: var(--dim);
+    }
+
+    .counter strong {
+      color: var(--text);
+    }
+
+    /* Timer bar (optional game mode) */
+    .timer-bar-track {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .timer-bar-track.active { opacity: 1; }
+
+    .timer-bar {
+      height: 100%;
+      border-radius: 4px;
+      width: 100%;
+      transform-origin: left;
+      transition: transform linear;
+    }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--dim);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .mode-toggle input {
+      display: none;
+    }
+
+    .toggle-track {
+      width: 36px;
+      height: 20px;
+      background: var(--border);
+      border-radius: 10px;
+      position: relative;
+      transition: background 0.2s ease;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--dim);
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .mode-toggle input:checked + .toggle-track {
+      background: var(--c1);
+    }
+
+    .mode-toggle input:checked + .toggle-track::after {
+      left: 18px;
+      background: white;
+    }
+
+    /* Keyboard hint */
+    .hint {
+      font-size: 0.7rem;
+      color: var(--dim);
+      opacity: 0.6;
+    }
+
+    .hint kbd {
+      display: inline-block;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.65rem;
+      margin: 0 2px;
+    }
+
+    @media (max-width: 480px) {
+      .card { padding: 36px 20px; }
+      .btn { padding: 16px 36px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <div class="app">
+    <div class="header">
+      <div class="logo">Name <span class="three">3</span> Things</div>
+      <div class="subtitle">Tap to get a random question</div>
+    </div>
+
+    <div class="category" id="category">Loading...</div>
+
+    <div class="card-wrapper">
+      <div class="card" id="card">
+        <div class="question-text" id="question">...</div>
+        <div class="dots">
+          <div class="dot" id="d1"></div>
+          <div class="dot" id="d2"></div>
+          <div class="dot" id="d3"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timer-bar-track" id="timerTrack">
+      <div class="timer-bar" id="timerBar"></div>
+    </div>
+
+    <label class="mode-toggle">
+      <span>Timer mode (10s)</span>
+      <input type="checkbox" id="timerToggle">
+      <div class="toggle-track"></div>
+    </label>
+
+    <button class="btn" id="btn" onclick="nextQuestion()">Next Question</button>
+
+    <div class="counter">Question <strong id="num">0</strong></div>
+    <div class="hint">or press <kbd>Space</kbd></div>
+  </div>
+
+  <script>
+    const questions = [
+      // 🎬 Entertainment
+      { q: "Name 3 movies that made you cry", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 songs you know all the words to", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 TV shows you could rewatch forever", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 fictional characters you relate to", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 movies with a twist ending", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 songs that instantly put you in a good mood", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 actors who always play the villain", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 video games you've spent too many hours on", cat: "Entertainment", color: "var(--c1)" },
+      { q: "Name 3 books that changed how you think", cat: "Entertainment", color: "var(--c1)" },
+
+      // 🍕 Food & Drink
+      { q: "Name 3 foods you could eat every single day", cat: "Food & Drink", color: "var(--c2)" },
+      { q: "Name 3 foods you hated as a kid but love now", cat: "Food & Drink", color: "var(--c2)" },
+      { q: "Name 3 cuisines you can't live without", cat: "Food & Drink", color: "var(--c2)" },
+      { q: "Name 3 things you always order at a cafe", cat: "Food & Drink", color: "var(--c2)" },
+      { q: "Name 3 snacks that disappear way too fast", cat: "Food & Drink", color: "var(--c2)" },
+      { q: "Name 3 foods that smell amazing but taste terrible", cat: "Food & Drink", color: "var(--c2)" },
+      { q: "Name 3 things you'd want at your last meal", cat: "Food & Drink", color: "var(--c2)" },
+      { q: "Name 3 breakfast foods that are also great for dinner", cat: "Food & Drink", color: "var(--c2)" },
+
+      // 🌍 Life & Experiences
+      { q: "Name 3 places you want to visit before you die", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 things that instantly make your day better", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 skills you wish you had", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 things you'd do if money wasn't a problem", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 things you're grateful for right now", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 things that scared you as a child", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 things on your bucket list", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 small things that annoy you way too much", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 things you'd grab if your house was on fire", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 sounds that make you feel calm", cat: "Life", color: "var(--c3)" },
+
+      // 🧠 Trivia & Knowledge
+      { q: "Name 3 countries in Africa", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 planets bigger than Earth", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 things you'd find in an operating room", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 capital cities in Europe", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 elements from the periodic table", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 famous inventors", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 types of clouds", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 oceans", cat: "Trivia", color: "var(--c4)" },
+      { q: "Name 3 bones in the human body", cat: "Trivia", color: "var(--c4)" },
+
+      // 🤪 Random & Fun
+      { q: "Name 3 things that are yellow", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things you'd bring to a deserted island", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 animals that could beat you in a fight", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things that are overrated", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things you can fit in your pocket", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things that come in pairs", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 words that rhyme with 'cat'", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things you'd teach an alien about Earth", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things that are round", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things you can do in under 10 seconds", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things people pretend to like", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 excuses people use when they're late", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things that are louder than they should be", cat: "Random", color: "var(--c5)" },
+      { q: "Name 3 things you associate with Monday", cat: "Random", color: "var(--c5)" },
+
+      // 💼 Work & Tech
+      { q: "Name 3 apps you can't live without", cat: "Tech", color: "var(--c4)" },
+      { q: "Name 3 things that waste time at work", cat: "Work", color: "var(--c4)" },
+      { q: "Name 3 dream jobs you had as a kid", cat: "Life", color: "var(--c3)" },
+      { q: "Name 3 websites you visit every day", cat: "Tech", color: "var(--c4)" },
+
+      // 🎯 Would You / Opinions
+      { q: "Name 3 superpowers you'd love to have", cat: "Fun", color: "var(--c5)" },
+      { q: "Name 3 historical figures you'd invite to dinner", cat: "Fun", color: "var(--c5)" },
+      { q: "Name 3 things that should be free", cat: "Opinions", color: "var(--c1)" },
+      { q: "Name 3 inventions that changed the world", cat: "Opinions", color: "var(--c1)" },
+      { q: "Name 3 things people always lie about", cat: "Fun", color: "var(--c5)" },
+      { q: "Name 3 things you'd ban if you ruled the world", cat: "Fun", color: "var(--c5)" },
+    ];
+
+    let count = 0;
+    let used = [];
+    let timerInterval = null;
+
+    const qEl = document.getElementById('question');
+    const catEl = document.getElementById('category');
+    const numEl = document.getElementById('num');
+    const cardEl = document.getElementById('card');
+    const dots = [document.getElementById('d1'), document.getElementById('d2'), document.getElementById('d3')];
+    const timerToggle = document.getElementById('timerToggle');
+    const timerTrack = document.getElementById('timerTrack');
+    const timerBar = document.getElementById('timerBar');
+
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function nextQuestion() {
+      if (used.length === 0) used = shuffle(questions);
+      const item = used.pop();
+
+      count++;
+      numEl.textContent = count;
+
+      // Animate
+      qEl.classList.remove('animating');
+      void qEl.offsetWidth;
+      qEl.classList.add('animating');
+
+      qEl.textContent = item.q;
+      catEl.textContent = item.cat;
+      catEl.style.background = item.color.replace(')', ', 0.12)').replace('var(', 'rgba(');
+      catEl.style.color = item.color;
+
+      // Use computed color for elements
+      const cs = getComputedStyle(document.documentElement);
+      const colorMap = {
+        'var(--c1)': '#ff3c6f',
+        'var(--c2)': '#ffe14d',
+        'var(--c3)': '#4de8ff',
+        'var(--c4)': '#a78bfa',
+        'var(--c5)': '#34d399'
+      };
+      const hex = colorMap[item.color] || '#ff3c6f';
+
+      catEl.style.background = hex + '18';
+      catEl.style.color = hex;
+      cardEl.style.setProperty('--card-accent', hex);
+      cardEl.querySelector('::after')
+      dots.forEach(d => d.style.background = hex + '55');
+
+      // Inline after pseudo workaround
+      cardEl.style.boxShadow = `0 -3px 0 0 ${hex} inset`;
+
+      // Timer
+      if (timerToggle.checked) startTimer(hex);
+    }
+
+    function startTimer(color) {
+      clearInterval(timerInterval);
+      timerTrack.classList.add('active');
+      timerBar.style.transition = 'none';
+      timerBar.style.transform = 'scaleX(1)';
+      timerBar.style.background = color;
+      void timerBar.offsetWidth;
+      timerBar.style.transition = 'transform 10s linear';
+      timerBar.style.transform = 'scaleX(0)';
+
+      timerInterval = setTimeout(() => {
+        timerTrack.classList.remove('active');
+      }, 10200);
+    }
+
+    timerToggle.addEventListener('change', () => {
+      if (!timerToggle.checked) {
+        clearInterval(timerInterval);
+        timerTrack.classList.remove('active');
+      }
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        nextQuestion();
+      }
+    });
+
+    // Touch feedback on card
+    cardEl.addEventListener('click', nextQuestion);
+
+    // Init
+    nextQuestion();
+  </script>
+</body>
+</html>
