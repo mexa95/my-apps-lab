@@ -134,6 +134,7 @@
     .card:nth-child(2) { animation-delay: 0.3s; }
     .card:nth-child(3) { animation-delay: 0.4s; }
     .card:nth-child(4) { animation-delay: 0.5s; }
+    .card:nth-child(5) { animation-delay: 0.6s; }
 
     .card::before {
       content: '';
@@ -283,7 +284,7 @@
 
     <div class="stats">
       <div class="stat">
-        <div class="stat-value" id="app-count">3</div>
+        <div class="stat-value" id="app-count">4</div>
         <div class="stat-label">Apps Live</div>
       </div>
       <div class="stat">
@@ -318,6 +319,14 @@
         <div class="card-icon" style="background: linear-gradient(135deg, rgba(196,162,101,0.15), rgba(100,80,60,0.15));">🧘</div>
         <h3>Meditation Timer</h3>
         <p>5, 10, 15 or custom minutes of stillness. Gong sound, breathing guide, progress ring.</p>
+        <div class="card-status status-live">Live</div>
+      </div>
+
+      <!-- Snake -->
+      <div class="card" onclick="window.open('/snake.html', '_self')">
+        <div class="card-icon" style="background: linear-gradient(135deg, rgba(0,229,160,0.15), rgba(0,80,50,0.15));">🐍</div>
+        <h3>Snake</h3>
+        <p>Classic snake game — eat food, grow longer, level up. Arrow keys or swipe to play.</p>
         <div class="card-status status-live">Live</div>
       </div>
 
