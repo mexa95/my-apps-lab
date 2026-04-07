@@ -252,6 +252,9 @@
     const powerup = new PowerUp();
     let particles = [];
     let scoreUser = 0, scoreAI = 0;
+    const WIN_SCORE = 5;
+    let gameOver = false;
+    let winner = null;
 
     function spawnParticles(x, y, color) {
       for (let i = 0; i < 15; i++) particles.push(new Particle(x, y, color));
@@ -320,8 +323,16 @@
       }
 
       // Scoring
-      if (ball.x < 0) { scoreAI++; ball.reset(); }
-      if (ball.x > W) { scoreUser++; ball.reset(); }
+      if (ball.x < 0) {
+        scoreAI++;
+        if (scoreAI >= WIN_SCORE) { gameOver = true; winner = 'ai'; }
+        else ball.reset();
+      }
+      if (ball.x > W) {
+        scoreUser++;
+        if (scoreUser >= WIN_SCORE) { gameOver = true; winner = 'user'; }
+        else ball.reset();
+      }
 
       // --- Drawing ---
       ctx.fillStyle = BG;
@@ -368,8 +379,51 @@
       ball.draw();
       particles.forEach(p => p.draw());
 
+      if (gameOver) {
+        // Dim overlay
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.fillRect(0, 0, W, H);
+
+        const isWin = winner === 'user';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Big result text
+        ctx.font = 'bold 80px Impact, Arial Black, sans-serif';
+        ctx.fillStyle = isWin ? '#00e5a0' : '#ff4444';
+        ctx.fillText(isWin ? 'YOU WIN!' : 'YOU LOSE', W / 2, H / 2 - 60);
+
+        // Score line
+        ctx.font = '36px Impact, Arial Black, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 + 10);
+
+        // Restart prompt
+        ctx.font = '18px sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillText('Click or press Enter to play again', W / 2, H / 2 + 70);
+        return;
+      }
+
       requestAnimationFrame(gameLoop);
     }
+
+    function restartGame() {
+      scoreUser = 0; scoreAI = 0;
+      gameOver = false; winner = null;
+      ball.reset();
+      particles = [];
+      powerup.active = false;
+      powerup.spawnTimer = 0;
+      user.h = user.baseHeight; user.powerTimer = 0;
+      ai.h = ai.baseHeight;   ai.powerTimer = 0;
+      requestAnimationFrame(gameLoop);
+    }
+
+    canvas.addEventListener('click', () => { if (gameOver) restartGame(); });
+    document.addEventListener('keydown', e => {
+      if (gameOver && (e.key === 'Enter' || e.key === ' ')) restartGame();
+    });
 
     gameLoop();
   </script>
