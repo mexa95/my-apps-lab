@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const raw = await kv.zrange(SCORES_KEY, 0, MAX_SCORES - 1, { rev: true, withScores: true });
+      const raw = await kv.zrevrange(SCORES_KEY, 0, MAX_SCORES - 1, { withScores: true });
       // raw is alternating [member, score, member, score, ...]
       const scores = [];
       for (let i = 0; i < raw.length; i += 2) {
