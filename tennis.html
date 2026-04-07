@@ -59,21 +59,44 @@
     resize();
     window.addEventListener('resize', resize);
 
-    // Mouse / touch tracking
+    // Game state
+    let gameState = 'menu'; // 'menu' | 'playing' | 'gameover'
+    let difficulty = 'medium';
+    let winScore = 5;
+    let winner = null;
+
+    // Input
     let mouseY = H / 2;
-    function getCanvasY(clientY) {
+    function getCanvasPos(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
-      return ((clientY - rect.top) / rect.height) * H;
+      return {
+        x: ((clientX - rect.left) / rect.width) * W,
+        y: ((clientY - rect.top) / rect.height) * H
+      };
     }
-    canvas.addEventListener('mousemove', e => { mouseY = getCanvasY(e.clientY); });
+    canvas.addEventListener('mousemove', e => {
+      if (gameState === 'playing') mouseY = getCanvasPos(e.clientX, e.clientY).y;
+    });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      mouseY = getCanvasY(e.touches[0].clientY);
+      if (gameState === 'playing') mouseY = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY).y;
     }, { passive: false });
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
-      mouseY = getCanvasY(e.touches[0].clientY);
+      if (gameState === 'playing') mouseY = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY).y;
     }, { passive: false });
+    canvas.addEventListener('touchend', e => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      handleTap(t.clientX, t.clientY);
+    }, { passive: false });
+    canvas.addEventListener('click', e => handleTap(e.clientX, e.clientY));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (gameState === 'menu') startGame();
+        else if (gameState === 'gameover') showMenu();
+      }
+    });
 
     // Colors
     const BG = '#14181c';
@@ -129,6 +152,7 @@
           this.pulse += 0.1;
         }
       }
+      reset() { this.active = false; this.spawnTimer = 0; this.pulse = 0; }
       draw() {
         if (!this.active) return;
         const glowR = this.radius + Math.abs(Math.sin(this.pulse * 2.5)) * 5;
@@ -247,25 +271,148 @@
 
     // --- Setup ---
     const user = new Paddle(50, '#dc3232');
-    const ai = new Paddle(W - 65, '#3264dc');
+    const ai   = new Paddle(W - 65, '#3264dc');
     const ball = new Ball();
     const powerup = new PowerUp();
     let particles = [];
     let scoreUser = 0, scoreAI = 0;
-    const WIN_SCORE = 5;
-    let gameOver = false;
-    let winner = null;
 
     function spawnParticles(x, y, color) {
       for (let i = 0; i < 15; i++) particles.push(new Particle(x, y, color));
     }
-
     function rectCollide(bx, by, br, rx, ry, rw, rh) {
       return bx + br > rx && bx - br < rx + rw && by + br > ry && by - br < ry + rh;
     }
 
+    // --- Menu ---
+    let menuButtons = [];
+    let menuPulse = 0;
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function handleTap(clientX, clientY) {
+      const pos = getCanvasPos(clientX, clientY);
+      if (gameState === 'menu') {
+        for (const btn of menuButtons) {
+          if (pos.x >= btn.x && pos.x <= btn.x + btn.w && pos.y >= btn.y && pos.y <= btn.y + btn.h) {
+            btn.action();
+            break;
+          }
+        }
+      } else if (gameState === 'gameover') {
+        showMenu();
+      }
+    }
+
+    function drawMenu() {
+      ctx.fillStyle = BG;
+      ctx.fillRect(0, 0, W, H);
+      // Faint table background
+      ctx.fillStyle = 'rgba(25,110,55,0.12)';
+      ctx.fillRect(40, 50, W - 80, H - 100);
+
+      menuButtons = [];
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Title
+      ctx.font = 'bold 72px Impact, Arial Black, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('TABLE TENNIS', W / 2, 110);
+
+      ctx.font = '22px sans-serif';
+      ctx.fillStyle = POWERUP_COLOR;
+      ctx.fillText('⚡ Power-Up Edition', W / 2, 155);
+
+      // Difficulty
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('DIFFICULTY', W / 2, 218);
+
+      const diffs = [
+        { key: 'easy',   label: 'Easy',   color: '#00e5a0' },
+        { key: 'medium', label: 'Medium', color: POWERUP_COLOR },
+        { key: 'hard',   label: 'Hard',   color: '#dc3232' },
+      ];
+      const bw = 160, bh = 52, gap = 20;
+      const totalBW = diffs.length * bw + (diffs.length - 1) * gap;
+      diffs.forEach((d, i) => {
+        const x = W / 2 - totalBW / 2 + i * (bw + gap);
+        const y = 234;
+        const sel = difficulty === d.key;
+        ctx.fillStyle = sel ? d.color : 'rgba(255,255,255,0.08)';
+        roundRect(x, y, bw, bh, 8);
+        ctx.fillStyle = sel ? '#000' : 'rgba(255,255,255,0.55)';
+        ctx.font = `${sel ? 'bold ' : ''}18px sans-serif`;
+        ctx.fillText(d.label, x + bw / 2, y + bh / 2);
+        menuButtons.push({ x, y, w: bw, h: bh, action: () => { difficulty = d.key; } });
+      });
+
+      // Score limit
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('FIRST TO', W / 2, 336);
+
+      const scores = [5, 7, 10];
+      const sbw = 120, sbh = 52, sgap = 24;
+      const totalSW = scores.length * sbw + (scores.length - 1) * sgap;
+      scores.forEach((s, i) => {
+        const x = W / 2 - totalSW / 2 + i * (sbw + sgap);
+        const y = 352;
+        const sel = winScore === s;
+        ctx.fillStyle = sel ? '#3264dc' : 'rgba(255,255,255,0.08)';
+        roundRect(x, y, sbw, sbh, 8);
+        ctx.fillStyle = sel ? '#fff' : 'rgba(255,255,255,0.55)';
+        ctx.font = `${sel ? 'bold ' : ''}28px Impact, sans-serif`;
+        ctx.fillText(s, x + sbw / 2, y + sbh / 2 + 1);
+        menuButtons.push({ x, y, w: sbw, h: sbh, action: () => { winScore = s; } });
+      });
+
+      // Play button (pulsing)
+      const pw = 240, ph = 64;
+      const px = W / 2 - pw / 2, py = 458;
+      const pulse = 1 + 0.04 * Math.sin(menuPulse * 3);
+      ctx.save();
+      ctx.translate(W / 2, py + ph / 2);
+      ctx.scale(pulse, pulse);
+      ctx.translate(-W / 2, -(py + ph / 2));
+      ctx.fillStyle = '#00e5a0';
+      roundRect(px, py, pw, ph, 12);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 26px Impact, Arial Black, sans-serif';
+      ctx.fillText('▶  PLAY', W / 2, py + ph / 2 + 1);
+      ctx.restore();
+      menuButtons.push({ x: px - 12, y: py - 12, w: pw + 24, h: ph + 24, action: startGame });
+    }
+
+    function menuLoop() {
+      if (gameState !== 'menu') return;
+      menuPulse += 0.03;
+      drawMenu();
+      requestAnimationFrame(menuLoop);
+    }
+
     // --- Game Loop ---
     function gameLoop() {
+      if (gameState !== 'playing') return;
+
+      const aiSpeed    = { easy: 3.5, medium: 6,   hard: 9.5 }[difficulty];
+      const aiDeadzone = { easy: 35,  medium: 15,  hard: 4   }[difficulty];
+      const aiError    = { easy: 70,  medium: 0,   hard: 0   }[difficulty];
+
       // User control
       user.centerY = mouseY;
       user.clamp();
@@ -273,13 +420,10 @@
 
       // AI
       ai.updateVelocity();
+      const aiTarget = ball.y + (aiError ? (Math.random() - 0.5) * aiError : 0);
       if (ball.vx > 0) {
-        const target = ball.y;
-        if (ai.centerY < target - 15) {
-          ai.y += Math.min(7, target - ai.centerY);
-        } else if (ai.centerY > target + 15) {
-          ai.y -= Math.min(7, ai.centerY - target);
-        }
+        if (ai.centerY < aiTarget - aiDeadzone) ai.y += Math.min(aiSpeed, aiTarget - ai.centerY);
+        else if (ai.centerY > aiTarget + aiDeadzone) ai.y -= Math.min(aiSpeed, ai.centerY - aiTarget);
       } else {
         if (ai.centerY < H / 2) ai.y += 2;
         else if (ai.centerY > H / 2) ai.y -= 2;
@@ -288,8 +432,6 @@
 
       ball.update();
       powerup.update();
-
-      // Update particles
       particles.forEach(p => p.update());
       particles = particles.filter(p => p.life > 0 && p.radius > 0);
 
@@ -325,12 +467,12 @@
       // Scoring
       if (ball.x < 0) {
         scoreAI++;
-        if (scoreAI >= WIN_SCORE) { gameOver = true; winner = 'ai'; }
+        if (scoreAI >= winScore) { gameState = 'gameover'; winner = 'ai'; }
         else ball.reset();
       }
       if (ball.x > W) {
         scoreUser++;
-        if (scoreUser >= WIN_SCORE) { gameOver = true; winner = 'user'; }
+        if (scoreUser >= winScore) { gameState = 'gameover'; winner = 'user'; }
         else ball.reset();
       }
 
@@ -338,14 +480,12 @@
       ctx.fillStyle = BG;
       ctx.fillRect(0, 0, W, H);
 
-      // Table
       ctx.fillStyle = TABLE;
       ctx.fillRect(40, 50, W - 80, H - 100);
       ctx.strokeStyle = '#c8c8c8';
       ctx.lineWidth = 4;
       ctx.strokeRect(40, 50, W - 80, H - 100);
 
-      // Center line
       ctx.setLineDash([8, 8]);
       ctx.beginPath();
       ctx.moveTo(W / 2, 50);
@@ -355,7 +495,6 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Score
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = '#fff';
       ctx.font = '60px Impact, Arial Black, sans-serif';
@@ -364,7 +503,6 @@
       ctx.fillText(`${scoreUser}     ${scoreAI}`, W / 2, 8);
       ctx.globalAlpha = 1;
 
-      // Labels
       ctx.font = '14px sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.textAlign = 'left';
@@ -379,8 +517,7 @@
       ball.draw();
       particles.forEach(p => p.draw());
 
-      if (gameOver) {
-        // Dim overlay
+      if (gameState === 'gameover') {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.fillRect(0, 0, W, H);
 
@@ -388,44 +525,43 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Big result text
         ctx.font = 'bold 80px Impact, Arial Black, sans-serif';
         ctx.fillStyle = isWin ? '#00e5a0' : '#ff4444';
         ctx.fillText(isWin ? 'YOU WIN!' : 'YOU LOSE', W / 2, H / 2 - 60);
 
-        // Score line
         ctx.font = '36px Impact, Arial Black, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 + 10);
 
-        // Restart prompt
         ctx.font = '18px sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.fillText('Click or press Enter to play again', W / 2, H / 2 + 70);
+        ctx.fillText('Tap or press Enter to go back to menu', W / 2, H / 2 + 70);
         return;
       }
 
       requestAnimationFrame(gameLoop);
     }
 
-    function restartGame() {
+    // --- State transitions ---
+    function startGame() {
+      gameState = 'playing';
       scoreUser = 0; scoreAI = 0;
-      gameOver = false; winner = null;
+      winner = null;
       ball.reset();
       particles = [];
-      powerup.active = false;
-      powerup.spawnTimer = 0;
-      user.h = user.baseHeight; user.powerTimer = 0;
-      ai.h = ai.baseHeight;   ai.powerTimer = 0;
+      powerup.reset();
+      user.h = user.baseHeight; user.powerTimer = 0; user.y = H / 2 - 50;
+      ai.h = ai.baseHeight;   ai.powerTimer = 0;   ai.y = H / 2 - 50;
+      mouseY = H / 2;
       requestAnimationFrame(gameLoop);
     }
 
-    canvas.addEventListener('click', () => { if (gameOver) restartGame(); });
-    document.addEventListener('keydown', e => {
-      if (gameOver && (e.key === 'Enter' || e.key === ' ')) restartGame();
-    });
+    function showMenu() {
+      gameState = 'menu';
+      requestAnimationFrame(menuLoop);
+    }
 
-    gameLoop();
+    showMenu();
   </script>
 </body>
 </html>
