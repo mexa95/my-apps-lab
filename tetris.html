@@ -828,32 +828,21 @@
     }, 1200);
   }
 
-  async function submitScore() {
+  function submitScore() {
     const nameInput = document.getElementById('name-input');
     const name = nameInput.value.trim();
     if (!name) { nameInput.focus(); return; }
 
-    const btn = document.querySelector('#submit-form .btn');
-    btn.textContent = 'Saving...';
-    btn.disabled = true;
+    const sanitized = name.slice(0, 20).replace(/[<>&"']/g, '');
+    if (!sanitized) { nameInput.focus(); return; }
 
-    try {
-      const res = await fetch('/api/scores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, score })
-      });
-      if (res.ok) {
-        document.getElementById('submit-form').classList.add('hidden');
-        fetchLeaderboard();
-      } else {
-        btn.textContent = 'Submit Score';
-        btn.disabled = false;
-      }
-    } catch {
-      btn.textContent = 'Submit Score';
-      btn.disabled = false;
-    }
+    const stored = JSON.parse(localStorage.getItem('tetris:scores') || '[]');
+    stored.push({ name: sanitized, score, date: new Date().toISOString() });
+    stored.sort((a, b) => b.score - a.score);
+    localStorage.setItem('tetris:scores', JSON.stringify(stored.slice(0, 10)));
+
+    document.getElementById('submit-form').classList.add('hidden');
+    fetchLeaderboard();
   }
 
   function skipSubmit() {
@@ -945,17 +934,9 @@
   });
 
   // ─── Leaderboard ─────────────────────────────────────────────────────────────
-  async function fetchLeaderboard() {
-    const el = document.getElementById('leaderboard-content');
-    el.innerHTML = '<span class="lb-empty">Loading...</span>';
-    try {
-      const res = await fetch('/api/scores');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      renderLeaderboard(data);
-    } catch {
-      el.innerHTML = '<button class="lb-retry" onclick="fetchLeaderboard()">Retry ↺</button>';
-    }
+  function fetchLeaderboard() {
+    const data = JSON.parse(localStorage.getItem('tetris:scores') || '[]');
+    renderLeaderboard(data);
   }
 
   function renderLeaderboard(scores) {
