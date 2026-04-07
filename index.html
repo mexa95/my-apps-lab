@@ -134,6 +134,7 @@
     .card:nth-child(2) { animation-delay: 0.3s; }
     .card:nth-child(3) { animation-delay: 0.4s; }
     .card:nth-child(4) { animation-delay: 0.5s; }
+    .card:nth-child(5) { animation-delay: 0.6s; }
 
     .card::before {
       content: '';
@@ -321,6 +322,11 @@
         <div class="card-status status-live">Live</div>
       </div>
 
+      <!-- Snake -->
+      <div class="card" onclick="window.open('/snake.html', '_self')">
+        <div class="card-icon" style="background: linear-gradient(135deg, rgba(0,229,160,0.15), rgba(0,80,50,0.15));">🐍</div>
+        <h3>Snake</h3>
+        <p>Classic snake game — eat food, grow longer, level up. Arrow keys or swipe to play.</p>
       <!-- Breathwork -->
       <div class="card" onclick="window.open('/breathwork.html', '_self')">
         <div class="card-icon" style="background: linear-gradient(135deg, rgba(91,164,217,0.15), rgba(91,217,164,0.15));">🌬️</div>
