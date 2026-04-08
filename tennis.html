@@ -108,19 +108,13 @@
     const TABLE = '#196e37';
     const BALL_COLOR = '#ffb432';
     const POWERUP_COLOR = '#ffd700';
-    const FIREBALL_COLOR = '#ff4500';
-
-    // Physics constants
-    const DRAG = 0.998;
-    const MAX_SPEED = 24;
-    const FIREBALL_MAX_SPEED = 28;
 
     // --- Classes ---
     class Particle {
-      constructor(x, y, color, bvx, bvy) {
+      constructor(x, y, color) {
         this.x = x; this.y = y;
-        this.vx = (Math.random() - 0.5) * 8 + (bvx || 0) * 0.3;
-        this.vy = (Math.random() - 0.5) * 8 + (bvy || 0) * 0.3;
+        this.vx = (Math.random() - 0.5) * 8;
+        this.vy = (Math.random() - 0.5) * 8;
         this.radius = 2 + Math.random() * 3;
         this.color = color;
         this.life = 1;
@@ -149,7 +143,6 @@
         this.active = false;
         this.spawnTimer = 0;
         this.pulse = 0;
-        this.type = 'expand';
       }
       update() {
         if (!this.active) {
@@ -158,7 +151,6 @@
             this.active = true;
             this.x = W / 4 + Math.random() * (W / 2);
             this.y = 100 + Math.random() * (H - 200);
-            this.type = Math.random() < 0.5 ? 'expand' : 'fireball';
             this.spawnTimer = 0;
           }
         } else {
@@ -168,24 +160,21 @@
       reset() { this.active = false; this.spawnTimer = 0; this.pulse = 0; }
       draw() {
         if (!this.active) return;
-        const isFireball = this.type === 'fireball';
-        const color = isFireball ? FIREBALL_COLOR : POWERUP_COLOR;
-        const glowColor = isFireball ? 'rgba(255,69,0,0.5)' : 'rgba(150,150,50,0.6)';
         const glowR = this.radius + Math.abs(Math.sin(this.pulse * 2.5)) * 5;
         ctx.beginPath();
         ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = glowColor;
+        ctx.fillStyle = 'rgba(150,150,50,0.6)';
         ctx.fill();
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = color;
+        ctx.fillStyle = POWERUP_COLOR;
         ctx.fill();
-        // Icon
-        ctx.fillStyle = isFireball ? '#cc3300' : '#a08000';
+        // Star icon
+        ctx.fillStyle = '#a08000';
         ctx.font = '14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(isFireball ? '\u{1F525}' : '\u2605', this.x, this.y + 1);
+        ctx.fillText('★', this.x, this.y + 1);
       }
     }
 
@@ -239,8 +228,6 @@
       constructor() {
         this.radius = 8;
         this.trail = [];
-        this.fireball = false;
-        this.fireballTimer = 0;
         this.reset();
       }
       reset() {
@@ -251,144 +238,39 @@
         this.spin = 0;
         this.trail = [];
         this.lastHit = null;
-        this.fireball = false;
-        this.fireballTimer = 0;
-      }
-      activateFireball() {
-        this.fireball = true;
-        this.fireballTimer = 400;
-        this.vx *= 1.3;
       }
       update() {
-        // Air drag
-        this.vx *= DRAG;
-        this.vy *= DRAG;
-        // Magnus effect — spin curves ball on both axes
-        this.vx += this.spin * 0.02 * Math.sign(this.vx);
-        this.vy += this.spin * 0.08;
-        this.spin *= 0.985;
-        // Speed cap
-        const maxSpd = this.fireball ? FIREBALL_MAX_SPEED : MAX_SPEED;
+        this.vy += this.spin * 0.05;
+        this.spin *= 0.98;
         const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
-        if (speed > maxSpd) {
-          this.vx = (this.vx / speed) * maxSpd;
-          this.vy = (this.vy / speed) * maxSpd;
-        }
-        // Minimum speed floor
-        if (speed > 0 && speed < 4) {
-          this.vx = (this.vx / speed) * 4;
-          this.vy = (this.vy / speed) * 4;
+        if (speed > 22) {
+          this.vx = (this.vx / speed) * 22;
+          this.vy = (this.vy / speed) * 22;
         }
         this.x += this.vx;
         this.y += this.vy;
-        const trailLen = this.fireball ? 15 : 10;
         this.trail.push({ x: this.x, y: this.y });
-        if (this.trail.length > trailLen) this.trail.shift();
-        // Wall bounce
+        if (this.trail.length > 10) this.trail.shift();
         if (this.y <= 50 || this.y >= H - 50) {
           this.vy *= -1;
-          this.spin *= -0.5;
+          this.spin *= 0.6;
           this.y = Math.max(50, Math.min(this.y, H - 50));
-        }
-        // Fireball timer
-        if (this.fireball) {
-          this.fireballTimer--;
-          if (this.fireballTimer <= 0) this.fireball = false;
         }
       }
       draw() {
-        if (this.fireball) {
-          // Fireball trail
-          for (let i = 0; i < this.trail.length; i++) {
-            const t = this.trail[i];
-            const pct = i / this.trail.length;
-            const size = Math.max(1, this.radius * 1.5 * pct);
-            const colors = ['#ff4500', '#ff6600', '#ffaa00', '#ffcc00'];
-            const ci = Math.floor(pct * (colors.length - 1));
-            ctx.globalAlpha = pct * 0.7;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
-            ctx.fillStyle = colors[ci];
-            ctx.fill();
-          }
-          ctx.globalAlpha = 1;
-          // Fireball glow
-          const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2.5);
-          grad.addColorStop(0, 'rgba(255,255,100,0.8)');
-          grad.addColorStop(0.4, 'rgba(255,140,0,0.5)');
-          grad.addColorStop(1, 'rgba(255,69,0,0)');
+        for (let i = 0; i < this.trail.length; i++) {
+          const t = this.trail[i];
+          const size = Math.max(1, this.radius * (i / 10));
+          const c = Math.max(0, 255 - (10 - i) * 20);
           ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius * 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = grad;
-          ctx.fill();
-          // Fireball core
-          const coreGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
-          coreGrad.addColorStop(0, '#fff8e0');
-          coreGrad.addColorStop(0.5, '#ffcc00');
-          coreGrad.addColorStop(1, '#ff4500');
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-          ctx.fillStyle = coreGrad;
-          ctx.fill();
-          // Spawn ember particles
-          if (Math.random() < 0.4) {
-            particles.push(new Particle(
-              this.x + (Math.random() - 0.5) * 6,
-              this.y + (Math.random() - 0.5) * 6,
-              ['#ff4500','#ff6600','#ffaa00'][Math.floor(Math.random() * 3)],
-              -this.vx * 0.1, -2
-            ));
-          }
-        } else {
-          // Normal trail
-          for (let i = 0; i < this.trail.length; i++) {
-            const t = this.trail[i];
-            const size = Math.max(1, this.radius * (i / 10));
-            const c = Math.max(0, 255 - (10 - i) * 20);
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
-            ctx.fillStyle = `rgb(${c},${Math.floor(c * 0.5)},0)`;
-            ctx.fill();
-          }
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-          ctx.fillStyle = BALL_COLOR;
+          ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgb(${c},${Math.floor(c * 0.5)},0)`;
           ctx.fill();
         }
-        // Spin indicator
-        if (Math.abs(this.spin) > 2) {
-          const spinDir = Math.sign(this.spin);
-          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius + 4, -Math.PI * 0.3 * spinDir, Math.PI * 0.3 * spinDir);
-          ctx.stroke();
-          const endAngle = Math.PI * 0.3 * spinDir;
-          const ax = this.x + (this.radius + 4) * Math.cos(endAngle);
-          const ay = this.y + (this.radius + 4) * Math.sin(endAngle);
-          ctx.beginPath();
-          ctx.arc(ax, ay, 2, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(255,255,255,0.4)';
-          ctx.fill();
-        }
-        // Speed lines
-        const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
-        if (speed > 15) {
-          const angle = Math.atan2(this.vy, this.vx);
-          ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.5, (speed - 15) * 0.05)})`;
-          ctx.lineWidth = 1;
-          for (let i = 0; i < 3; i++) {
-            const offset = (i - 1) * 5;
-            const startX = this.x - Math.cos(angle) * (this.radius + 5 + i * 8);
-            const startY = this.y - Math.sin(angle) * (this.radius + 5 + i * 8) + offset;
-            const endX = startX - Math.cos(angle) * (8 + speed * 0.3);
-            const endY = startY - Math.sin(angle) * (8 + speed * 0.3);
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
-          }
-        }
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = BALL_COLOR;
+        ctx.fill();
       }
     }
 
@@ -399,12 +281,9 @@
     const powerup = new PowerUp();
     let particles = [];
     let scoreUser = 0, scoreAI = 0;
-    let screenShake = { intensity: 0 };
-    let hitFlash = { x: 0, y: 0, timer: 0 };
 
-    function spawnParticles(x, y, color, count, bvx, bvy) {
-      count = count || 15;
-      for (let i = 0; i < count; i++) particles.push(new Particle(x, y, color, bvx, bvy));
+    function spawnParticles(x, y, color) {
+      for (let i = 0; i < 15; i++) particles.push(new Particle(x, y, color));
     }
     function rectCollide(bx, by, br, rx, ry, rw, rh) {
       return bx + br > rx && bx - br < rx + rw && by + br > ry && by - br < ry + rh;
@@ -461,7 +340,7 @@
 
       ctx.font = '22px sans-serif';
       ctx.fillStyle = POWERUP_COLOR;
-      ctx.fillText('\u26A1 Power-Up Edition \u{1F525}', W / 2, 155);
+      ctx.fillText('⚡ Power-Up Edition', W / 2, 155);
 
       // Difficulty
       ctx.font = 'bold 13px sans-serif';
@@ -544,16 +423,12 @@
       user.clamp();
       user.updateVelocity();
 
-      // AI — predict ball position with gravity
+      // AI
       ai.updateVelocity();
-      let aiTarget;
+      const aiTarget = ball.y + (aiError ? (Math.random() - 0.5) * aiError : 0);
       if (ball.vx > 0) {
-        const framesToReach = Math.min((ai.x - ball.x) / Math.max(ball.vx, 1), 60);
-        const predictedY = ball.y + ball.vy * framesToReach;
-        aiTarget = predictedY + (aiError ? (Math.random() - 0.5) * aiError : 0);
-        const effectiveSpeed = ball.fireball ? aiSpeed * 0.85 : aiSpeed;
-        if (ai.centerY < aiTarget - aiDeadzone) ai.y += Math.min(effectiveSpeed, aiTarget - ai.centerY);
-        else if (ai.centerY > aiTarget + aiDeadzone) ai.y -= Math.min(effectiveSpeed, ai.centerY - aiTarget);
+        if (ai.centerY < aiTarget - aiDeadzone) ai.y += Math.min(aiSpeed, aiTarget - ai.centerY);
+        else if (ai.centerY > aiTarget + aiDeadzone) ai.y -= Math.min(aiSpeed, ai.centerY - aiTarget);
       } else {
         if (ai.centerY < H / 2) ai.y += 2;
         else if (ai.centerY > H / 2) ai.y -= 2;
@@ -565,38 +440,22 @@
       particles.forEach(p => p.update());
       particles = particles.filter(p => p.life > 0 && p.radius > 0);
 
-      // Ball-Paddle collisions (with smash detection)
-      // Fireball reduces effective hit zone for the defender
-      const userEffH = ball.fireball ? user.h * 0.7 : user.h;
-      const userEffY = user.y + (user.h - userEffH) / 2;
-      const aiEffH = ball.fireball ? ai.h * 0.7 : ai.h;
-      const aiEffY = ai.y + (ai.h - aiEffH) / 2;
-
-      if (rectCollide(ball.x, ball.y, ball.radius, user.x, userEffY, user.w, userEffH) && ball.vx < 0) {
-        const hitPower = Math.abs(user.vy);
-        const smash = hitPower > 8;
-        ball.vx *= smash ? -1.15 : -1.05;
+      // Ball-Paddle collisions
+      if (rectCollide(ball.x, ball.y, ball.radius, user.x, user.y, user.w, user.h) && ball.vx < 0) {
+        ball.vx *= -1.05;
         ball.vy += ((ball.y - user.centerY) / (user.h / 2)) * 6;
-        ball.spin = user.vy * 0.6;
+        ball.spin = user.vy * 0.4;
         ball.x = user.x + user.w + ball.radius;
         ball.lastHit = 'user';
-        const pCount = Math.floor(10 + hitPower * 3);
-        spawnParticles(ball.x, ball.y, user.color, pCount, ball.vx, ball.vy);
-        if (hitPower > 5) screenShake.intensity = Math.min(hitPower * 0.8, 10);
-        hitFlash = { x: ball.x, y: ball.y, timer: 3 };
+        spawnParticles(ball.x, ball.y, user.color);
       }
-      if (rectCollide(ball.x, ball.y, ball.radius, ai.x, aiEffY, ai.w, aiEffH) && ball.vx > 0) {
-        const hitPower = Math.abs(ai.vy);
-        const smash = hitPower > 8;
-        ball.vx *= smash ? -1.15 : -1.05;
+      if (rectCollide(ball.x, ball.y, ball.radius, ai.x, ai.y, ai.w, ai.h) && ball.vx > 0) {
+        ball.vx *= -1.05;
         ball.vy += ((ball.y - ai.centerY) / (ai.h / 2)) * 6;
-        ball.spin = ai.vy * 0.6;
+        ball.spin = ai.vy * 0.4;
         ball.x = ai.x - ball.radius;
         ball.lastHit = 'ai';
-        const pCount = Math.floor(10 + hitPower * 3);
-        spawnParticles(ball.x, ball.y, ai.color, pCount, ball.vx, ball.vy);
-        if (hitPower > 5) screenShake.intensity = Math.min(hitPower * 0.8, 10);
-        hitFlash = { x: ball.x, y: ball.y, timer: 3 };
+        spawnParticles(ball.x, ball.y, ai.color);
       }
 
       // PowerUp collision
@@ -604,14 +463,9 @@
         const dist = Math.sqrt((ball.x - powerup.x) ** 2 + (ball.y - powerup.y) ** 2);
         if (dist < ball.radius + powerup.radius) {
           powerup.active = false;
-          const puColor = powerup.type === 'fireball' ? FIREBALL_COLOR : POWERUP_COLOR;
-          spawnParticles(powerup.x, powerup.y, puColor, 20, ball.vx, ball.vy);
-          if (powerup.type === 'fireball') {
-            ball.activateFireball();
-          } else {
-            if (ball.lastHit === 'user') user.activatePowerup();
-            else if (ball.lastHit === 'ai') ai.activatePowerup();
-          }
+          spawnParticles(powerup.x, powerup.y, POWERUP_COLOR);
+          if (ball.lastHit === 'user') user.activatePowerup();
+          else if (ball.lastHit === 'ai') ai.activatePowerup();
         }
       }
 
@@ -628,22 +482,8 @@
       }
 
       // --- Drawing ---
-      // Update screen shake
-      if (screenShake.intensity > 0) {
-        screenShake.intensity *= 0.85;
-        if (screenShake.intensity < 0.5) screenShake.intensity = 0;
-      }
-      if (hitFlash.timer > 0) hitFlash.timer--;
-
-      ctx.save();
-      if (screenShake.intensity > 0) {
-        const sx = (Math.random() - 0.5) * screenShake.intensity * 2;
-        const sy = (Math.random() - 0.5) * screenShake.intensity * 2;
-        ctx.translate(sx, sy);
-      }
-
       ctx.fillStyle = BG;
-      ctx.fillRect(-10, -10, W + 20, H + 20);
+      ctx.fillRect(0, 0, W, H);
 
       ctx.fillStyle = TABLE;
       ctx.fillRect(40, 50, W - 80, H - 100);
@@ -682,28 +522,6 @@
       ball.draw();
       particles.forEach(p => p.draw());
 
-      // Hit flash effect
-      if (hitFlash.timer > 0) {
-        ctx.globalAlpha = hitFlash.timer * 0.25;
-        ctx.beginPath();
-        ctx.arc(hitFlash.x, hitFlash.y, 20 + (3 - hitFlash.timer) * 10, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-
-      // Fireball active indicator
-      if (ball.fireball) {
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillStyle = FIREBALL_COLOR;
-        ctx.textAlign = 'center';
-        ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.01) * 0.3;
-        ctx.fillText('\u{1F525} FIREBALL', W / 2, H - 30);
-        ctx.globalAlpha = 1;
-      }
-
-      ctx.restore();
-
       if (gameState === 'gameover') {
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         ctx.fillRect(0, 0, W, H);
@@ -738,8 +556,6 @@
       ball.reset();
       particles = [];
       powerup.reset();
-      screenShake = { intensity: 0 };
-      hitFlash = { x: 0, y: 0, timer: 0 };
       user.h = user.baseHeight; user.powerTimer = 0; user.y = H / 2 - 50;
       ai.h = ai.baseHeight;   ai.powerTimer = 0;   ai.y = H / 2 - 50;
       mouseY = H / 2;
