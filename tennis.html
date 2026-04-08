@@ -14,7 +14,6 @@
       min-height: 100dvh;
       overflow: hidden;
       font-family: 'Impact', 'Arial Black', sans-serif;
-      cursor: none;
     }
     canvas {
       display: block;
@@ -75,7 +74,13 @@
       };
     }
     canvas.addEventListener('mousemove', e => {
-      if (gameState === 'playing') mouseY = getCanvasPos(e.clientX, e.clientY).y;
+      const pos = getCanvasPos(e.clientX, e.clientY);
+      if (gameState === 'playing') {
+        mouseY = pos.y;
+      } else if (gameState === 'menu') {
+        const over = menuButtons.some(b => pos.x >= b.x && pos.x <= b.x + b.w && pos.y >= b.y && pos.y <= b.y + b.h);
+        canvas.style.cursor = over ? 'pointer' : 'default';
+      }
     });
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
@@ -467,12 +472,12 @@
       // Scoring
       if (ball.x < 0) {
         scoreAI++;
-        if (scoreAI >= winScore) { gameState = 'gameover'; winner = 'ai'; }
+        if (scoreAI >= winScore) { gameState = 'gameover'; winner = 'ai'; canvas.style.cursor = 'default'; }
         else ball.reset();
       }
       if (ball.x > W) {
         scoreUser++;
-        if (scoreUser >= winScore) { gameState = 'gameover'; winner = 'user'; }
+        if (scoreUser >= winScore) { gameState = 'gameover'; winner = 'user'; canvas.style.cursor = 'default'; }
         else ball.reset();
       }
 
@@ -545,6 +550,7 @@
     // --- State transitions ---
     function startGame() {
       gameState = 'playing';
+      canvas.style.cursor = 'none';
       scoreUser = 0; scoreAI = 0;
       winner = null;
       ball.reset();
@@ -558,6 +564,7 @@
 
     function showMenu() {
       gameState = 'menu';
+      canvas.style.cursor = 'default';
       requestAnimationFrame(menuLoop);
     }
 
