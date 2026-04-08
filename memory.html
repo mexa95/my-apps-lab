@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Matrix - Mehran's Playground</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #e0e0e8;
+      --text-dim: #6a6a80;
+      --accent: #00e5a0;
+      --accent-glow: rgba(0, 229, 160, 0.15);
+      --accent-bright: #00ffb3;
+      --warm: #ff6b4a;
+      --purple: #a855f7;
+      --blue: #3b82f6;
+      --gold: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    canvas#particles {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    .back-btn {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 1px;
+      transition: color 0.3s;
+      z-index: 200;
+    }
+    .back-btn:hover { color: var(--accent); }
+
+    .game-wrapper {
+      width: 100%;
+      max-width: 600px;
+      padding: 60px 20px 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    /* Header */
+    .game-header {
+      text-align: center;
+      animation: fadeUp 0.6s ease-out;
+    }
+
+    .game-header h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .game-header p {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      width: 100%;
+      padding: 16px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      animation: fadeUp 0.6s ease-out 0.1s both;
+    }
+
+    .stat-item {
+      text-align: center;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .stat-val {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      transition: all 0.3s;
+    }
+
+    .stat-val.score { color: var(--gold); }
+    .stat-val.combo { color: var(--purple); }
+    .stat-val.lives { color: var(--warm); }
+
+    .stat-lbl {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .stat-val.pop {
+      animation: pop 0.3s ease-out;
+    }
+
+    /* Message display */
+    .message {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--accent);
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+
+    .message.error { color: var(--warm); }
+    .message.gold { color: var(--gold); }
+
+    /* Grid container */
+    .grid-container {
+      position: relative;
+      animation: fadeUp 0.6s ease-out 0.2s both;
+    }
+
+    .grid {
+      display: grid;
+      gap: 6px;
+      perspective: 600px;
+    }
+
+    .cell {
+      aspect-ratio: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cell::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 7px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .cell:hover:not(.revealed):not(.locked) {
+      border-color: rgba(0, 229, 160, 0.3);
+      transform: scale(1.05);
+    }
+
+    .cell.highlight {
+      background: var(--accent);
+      border-color: var(--accent-bright);
+      box-shadow: 0 0 20px var(--accent-glow), inset 0 0 20px rgba(255,255,255,0.1);
+    }
+
+    .cell.correct {
+      background: var(--accent);
+      border-color: var(--accent-bright);
+      box-shadow: 0 0 24px var(--accent-glow);
+      animation: correctPulse 0.5s ease-out;
+    }
+
+    .cell.wrong {
+      background: var(--warm);
+      border-color: var(--warm);
+      box-shadow: 0 0 24px rgba(255, 107, 74, 0.3);
+      animation: shake 0.4s ease-out;
+    }
+
+    .cell.missed {
+      background: rgba(168, 85, 247, 0.3);
+      border-color: var(--purple);
+    }
+
+    .cell.locked {
+      cursor: default;
+    }
+
+    /* Countdown overlay */
+    .countdown {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(10, 10, 15, 0.7);
+      border-radius: 8px;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .countdown.visible {
+      opacity: 1;
+    }
+
+    /* Buttons */
+    .btn {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 14px 36px;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn:hover {
+      background: var(--accent);
+      color: var(--bg);
+      box-shadow: 0 0 24px var(--accent-glow);
+    }
+
+    /* Game over screen */
+    .game-over {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 40px;
+      animation: fadeUp 0.5s ease-out;
+    }
+
+    .game-over.visible { display: flex; }
+
+    .game-over h2 {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.8rem;
+      background: linear-gradient(135deg, var(--warm), var(--gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .final-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .final-stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .final-stat .val {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .final-stat .lbl {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* High score */
+    .highscore-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--gold);
+      border: 1px solid var(--gold);
+      padding: 6px 16px;
+      border-radius: 2px;
+      animation: glow 1.5s ease-in-out infinite alternate;
+    }
+
+    /* Level progress bar */
+    .progress-bar {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--purple));
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    /* How to play */
+    .how-to-play {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      width: 100%;
+      max-width: 400px;
+      animation: fadeUp 0.6s ease-out 0.3s both;
+    }
+
+    .how-to-play h3 {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      color: var(--accent);
+    }
+
+    .how-to-play ol {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      line-height: 1.8;
+      padding-left: 20px;
+    }
+
+    .how-to-play li::marker {
+      color: var(--accent);
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* Difficulty selector */
+    .difficulty {
+      display: flex;
+      gap: 8px;
+      animation: fadeUp 0.6s ease-out 0.25s both;
+    }
+
+    .diff-btn {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 8px 18px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .diff-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .diff-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.3); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes correctPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+
+    @keyframes glow {
+      from { box-shadow: 0 0 4px rgba(251, 191, 36, 0.2); }
+      to { box-shadow: 0 0 16px rgba(251, 191, 36, 0.4); }
+    }
+
+    @media (max-width: 480px) {
+      .game-wrapper { padding: 50px 12px 30px; gap: 16px; }
+      .stats-bar { gap: 16px; }
+      .stat-val { font-size: 1.1rem; }
+      .grid { gap: 4px; }
+      .cell { border-radius: 6px; }
+      .difficulty { gap: 4px; }
+      .diff-btn { padding: 6px 12px; font-size: 0.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-btn">&larr; Back</a>
+  <canvas id="particles"></canvas>
+
+  <div class="game-wrapper">
+    <div class="game-header">
+      <h1>Memory Matrix</h1>
+      <p>Watch the pattern. Recall it. How far can you go?</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-val" id="level">1</div>
+        <div class="stat-lbl">Level</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val score" id="score">0</div>
+        <div class="stat-lbl">Score</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val combo" id="combo">0x</div>
+        <div class="stat-lbl">Combo</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val lives" id="lives">3</div>
+        <div class="stat-lbl">Lives</div>
+      </div>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress" style="width: 0%"></div>
+    </div>
+
+    <div class="message" id="message">Choose difficulty and press Start</div>
+
+    <div class="difficulty" id="difficultySelect">
+      <button class="diff-btn active" data-diff="easy">Easy</button>
+      <button class="diff-btn" data-diff="medium">Medium</button>
+      <button class="diff-btn" data-diff="hard">Hard</button>
+    </div>
+
+    <div class="grid-container" id="gridContainer">
+      <div class="grid" id="grid"></div>
+      <div class="countdown" id="countdown"></div>
+    </div>
+
+    <button class="btn" id="startBtn">Start Game</button>
+
+    <div class="game-over" id="gameOver">
+      <h2>Game Over</h2>
+      <div id="highscoreBadge" class="highscore-badge" style="display:none">New High Score!</div>
+      <div class="final-stats">
+        <div class="final-stat">
+          <div class="val" id="finalScore">0</div>
+          <div class="lbl">Score</div>
+        </div>
+        <div class="final-stat">
+          <div class="val" id="finalLevel">0</div>
+          <div class="lbl">Level</div>
+        </div>
+        <div class="final-stat">
+          <div class="val" id="finalCombo">0</div>
+          <div class="lbl">Best Combo</div>
+        </div>
+        <div class="final-stat">
+          <div class="val" id="finalBest">0</div>
+          <div class="lbl">High Score</div>
+        </div>
+      </div>
+      <button class="btn" id="restartBtn">Play Again</button>
+    </div>
+
+    <div class="how-to-play" id="howToPlay">
+      <h3>How to Play</h3>
+      <ol>
+        <li>Watch the tiles that light up</li>
+        <li>After they disappear, click them from memory</li>
+        <li>Each level adds more tiles to remember</li>
+        <li>Build combos for bonus points</li>
+        <li>3 lives - one wrong click costs a life</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // ── State ──
+    const state = {
+      level: 1,
+      score: 0,
+      combo: 0,
+      bestCombo: 0,
+      lives: 3,
+      maxLives: 3,
+      pattern: [],
+      found: new Set(),
+      gridSize: 4,
+      tilesCount: 3,
+      phase: 'idle', // idle | showing | playing | gameover
+      difficulty: 'easy',
+      highScore: parseInt(localStorage.getItem('memoryMatrixHigh') || '0'),
+    };
+
+    // Difficulty configs
+    const DIFF = {
+      easy:   { startGrid: 4, startTiles: 3, tileIncrement: 1, showTime: 1200, showTimeMin: 500, showDecay: 50 },
+      medium: { startGrid: 5, startTiles: 4, tileIncrement: 1, showTime: 1000, showTimeMin: 400, showDecay: 60 },
+      hard:   { startGrid: 6, startTiles: 5, tileIncrement: 1, showTime: 800,  showTimeMin: 300, showDecay: 70 },
+    };
+
+    // ── DOM refs ──
+    const $grid = document.getElementById('grid');
+    const $level = document.getElementById('level');
+    const $score = document.getElementById('score');
+    const $combo = document.getElementById('combo');
+    const $lives = document.getElementById('lives');
+    const $message = document.getElementById('message');
+    const $startBtn = document.getElementById('startBtn');
+    const $restartBtn = document.getElementById('restartBtn');
+    const $gameOver = document.getElementById('gameOver');
+    const $countdown = document.getElementById('countdown');
+    const $progress = document.getElementById('progress');
+    const $howToPlay = document.getElementById('howToPlay');
+    const $diffSelect = document.getElementById('difficultySelect');
+    const $gridContainer = document.getElementById('gridContainer');
+
+    // ── Particles ──
+    const canvas = document.getElementById('particles');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function spawnParticles(x, y, color, count = 12) {
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+        const speed = 1.5 + Math.random() * 3;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          decay: 0.02 + Math.random() * 0.02,
+          size: 2 + Math.random() * 3,
+          color,
+        });
+      }
+    }
+
+    function animateParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles = particles.filter(p => p.life > 0);
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.04;
+        p.life -= p.decay;
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(animateParticles);
+    }
+    animateParticles();
+
+    // ── Sound (Web Audio) ──
+    let audioCtx;
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    function playTone(freq, duration = 0.12, type = 'sine', vol = 0.15) {
+      ensureAudio();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function playCorrect() {
+      const base = 523 + state.combo * 40;
+      playTone(base, 0.15, 'sine', 0.12);
+      setTimeout(() => playTone(base * 1.25, 0.12, 'sine', 0.1), 60);
+    }
+
+    function playWrong() {
+      playTone(200, 0.25, 'sawtooth', 0.1);
+      setTimeout(() => playTone(150, 0.3, 'sawtooth', 0.08), 100);
+    }
+
+    function playReveal() {
+      playTone(880, 0.08, 'sine', 0.06);
+    }
+
+    function playLevelUp() {
+      [523, 659, 784, 1047].forEach((f, i) => {
+        setTimeout(() => playTone(f, 0.2, 'sine', 0.1), i * 100);
+      });
+    }
+
+    function playGameOver() {
+      [400, 350, 300, 200].forEach((f, i) => {
+        setTimeout(() => playTone(f, 0.3, 'sawtooth', 0.08), i * 150);
+      });
+    }
+
+    // ── Grid ──
+    function buildGrid() {
+      const conf = DIFF[state.difficulty];
+      // Grow grid at certain levels
+      if (state.level >= 8 && conf.startGrid < 6) state.gridSize = conf.startGrid + 1;
+      if (state.level >= 15) state.gridSize = Math.min(conf.startGrid + 2, 7);
+
+      const size = state.gridSize;
+      const cellSize = Math.min(Math.floor((Math.min(window.innerWidth - 40, 500)) / size) - 6, 80);
+
+      $grid.style.gridTemplateColumns = `repeat(${size}, ${cellSize}px)`;
+      $grid.style.gridTemplateRows = `repeat(${size}, ${cellSize}px)`;
+      $grid.innerHTML = '';
+
+      for (let i = 0; i < size * size; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.index = i;
+        cell.addEventListener('click', () => handleCellClick(i, cell));
+        $grid.appendChild(cell);
+      }
+    }
+
+    function generatePattern() {
+      const conf = DIFF[state.difficulty];
+      const total = state.gridSize * state.gridSize;
+      state.tilesCount = conf.startTiles + (state.level - 1) * conf.tileIncrement;
+      // Cap at 60% of grid
+      state.tilesCount = Math.min(state.tilesCount, Math.floor(total * 0.6));
+
+      const indices = [];
+      while (indices.length < state.tilesCount) {
+        const r = Math.floor(Math.random() * total);
+        if (!indices.includes(r)) indices.push(r);
+      }
+      state.pattern = indices;
+      state.found = new Set();
+    }
+
+    // ── Show pattern ──
+    async function showPattern() {
+      state.phase = 'showing';
+      setMessage('Memorize the pattern...', '');
+
+      const cells = $grid.querySelectorAll('.cell');
+      cells.forEach(c => { c.classList.remove('correct', 'wrong', 'missed', 'locked'); });
+
+      // Brief countdown for levels > 1
+      if (state.level > 1) {
+        $countdown.classList.add('visible');
+        $countdown.textContent = 'Ready';
+        await wait(600);
+        $countdown.classList.remove('visible');
+        await wait(200);
+      }
+
+      // Highlight pattern tiles one by one with stagger
+      const stagger = Math.max(40, 120 - state.level * 5);
+      for (let i = 0; i < state.pattern.length; i++) {
+        const cell = cells[state.pattern[i]];
+        cell.classList.add('highlight');
+        playReveal();
+        await wait(stagger);
+      }
+
+      // Hold the pattern visible
+      const conf = DIFF[state.difficulty];
+      const showTime = Math.max(conf.showTimeMin, conf.showTime - (state.level - 1) * conf.showDecay);
+      await wait(showTime);
+
+      // Hide pattern
+      state.pattern.forEach(idx => {
+        cells[idx].classList.remove('highlight');
+      });
+
+      state.phase = 'playing';
+      setMessage('Click the tiles!', '');
+    }
+
+    // ── Cell click ──
+    function handleCellClick(index, cell) {
+      if (state.phase !== 'playing') return;
+      if (state.found.has(index)) return;
+      if (cell.classList.contains('wrong')) return;
+
+      const rect = cell.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      if (state.pattern.includes(index)) {
+        // Correct
+        state.found.add(index);
+        cell.classList.add('correct', 'locked');
+        state.combo++;
+        if (state.combo > state.bestCombo) state.bestCombo = state.combo;
+
+        const points = 10 * state.combo;
+        state.score += points;
+        playCorrect();
+        spawnParticles(cx, cy, '#00e5a0', 10);
+
+        updateUI();
+
+        // Check if level complete
+        if (state.found.size === state.pattern.length) {
+          levelComplete();
+        }
+      } else {
+        // Wrong
+        cell.classList.add('wrong', 'locked');
+        state.combo = 0;
+        state.lives--;
+        playWrong();
+        spawnParticles(cx, cy, '#ff6b4a', 8);
+
+        updateUI();
+
+        if (state.lives <= 0) {
+          gameOver();
+        } else {
+          setMessage(`Wrong! ${state.lives} ${state.lives === 1 ? 'life' : 'lives'} left`, 'error');
+        }
+      }
+    }
+
+    // ── Level complete ──
+    async function levelComplete() {
+      state.phase = 'showing';
+      const bonus = state.level * 5;
+      state.score += bonus;
+      playLevelUp();
+
+      setMessage(`Level ${state.level} complete! +${bonus} bonus`, 'gold');
+      updateUI();
+
+      await wait(1200);
+
+      state.level++;
+      buildGrid();
+      generatePattern();
+      updateUI();
+      showPattern();
+    }
+
+    // ── Game Over ──
+    function gameOver() {
+      state.phase = 'gameover';
+      playGameOver();
+
+      // Show missed tiles
+      const cells = $grid.querySelectorAll('.cell');
+      state.pattern.forEach(idx => {
+        if (!state.found.has(idx)) {
+          cells[idx].classList.add('missed');
+        }
+      });
+
+      const isHighScore = state.score > state.highScore;
+      if (isHighScore) {
+        state.highScore = state.score;
+        localStorage.setItem('memoryMatrixHigh', state.score.toString());
+      }
+
+      setTimeout(() => {
+        $gridContainer.style.display = 'none';
+        $gameOver.classList.add('visible');
+        document.getElementById('finalScore').textContent = state.score;
+        document.getElementById('finalLevel').textContent = state.level;
+        document.getElementById('finalCombo').textContent = state.bestCombo + 'x';
+        document.getElementById('finalBest').textContent = state.highScore;
+        document.getElementById('highscoreBadge').style.display = isHighScore ? 'block' : 'none';
+        setMessage('', '');
+      }, 1500);
+    }
+
+    // ── Start ──
+    function startGame() {
+      state.level = 1;
+      state.score = 0;
+      state.combo = 0;
+      state.bestCombo = 0;
+      state.lives = state.maxLives;
+      state.phase = 'idle';
+
+      const conf = DIFF[state.difficulty];
+      state.gridSize = conf.startGrid;
+
+      $gameOver.classList.remove('visible');
+      $gridContainer.style.display = 'block';
+      $startBtn.style.display = 'none';
+      $howToPlay.style.display = 'none';
+      $diffSelect.style.display = 'none';
+
+      buildGrid();
+      generatePattern();
+      updateUI();
+      showPattern();
+    }
+
+    // ── UI ──
+    function updateUI() {
+      animateStat($level, state.level);
+      animateStat($score, state.score);
+      animateStat($combo, state.combo + 'x');
+      animateStat($lives, state.lives);
+
+      const conf = DIFF[state.difficulty];
+      const totalTiles = conf.startTiles + (state.level - 1) * conf.tileIncrement;
+      const pct = state.found.size / state.pattern.length * 100;
+      $progress.style.width = pct + '%';
+    }
+
+    function animateStat(el, value) {
+      const strVal = value.toString();
+      if (el.textContent !== strVal) {
+        el.textContent = strVal;
+        el.classList.remove('pop');
+        void el.offsetWidth; // reflow
+        el.classList.add('pop');
+      }
+    }
+
+    function setMessage(text, type) {
+      $message.textContent = text;
+      $message.className = 'message' + (type ? ' ' + type : '');
+    }
+
+    function wait(ms) {
+      return new Promise(r => setTimeout(r, ms));
+    }
+
+    // ── Difficulty selector ──
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.difficulty = btn.dataset.diff;
+      });
+    });
+
+    // ── Buttons ──
+    $startBtn.addEventListener('click', startGame);
+    $restartBtn.addEventListener('click', () => {
+      $diffSelect.style.display = 'flex';
+      $howToPlay.style.display = 'block';
+      $startBtn.style.display = 'inline-block';
+      $gameOver.classList.remove('visible');
+      $gridContainer.style.display = 'block';
+      $grid.innerHTML = '';
+      setMessage('Choose difficulty and press Start', '');
+      $progress.style.width = '0%';
+      updateUI();
+    });
+
+    // ── Keyboard shortcuts ──
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space' && state.phase === 'idle') {
+        e.preventDefault();
+        startGame();
+      }
+      if (e.code === 'KeyR' && state.phase === 'gameover') {
+        $restartBtn.click();
+      }
+    });
+
+    // Init
+    buildGrid();
+  </script>
+</body>
+</html>
