@@ -111,7 +111,6 @@
     const FIREBALL_COLOR = '#ff4500';
 
     // Physics constants
-    const GRAVITY = 0.15;
     const DRAG = 0.998;
     const MAX_SPEED = 24;
     const FIREBALL_MAX_SPEED = 28;
@@ -129,7 +128,6 @@
       update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.vy += 0.2;
         this.life -= 0.06;
         this.radius -= 0.1;
       }
@@ -265,8 +263,6 @@
         // Air drag
         this.vx *= DRAG;
         this.vy *= DRAG;
-        // Gravity
-        this.vy += GRAVITY;
         // Magnus effect — spin curves ball on both axes
         this.vx += this.spin * 0.02 * Math.sign(this.vx);
         this.vy += this.spin * 0.08;
@@ -553,7 +549,7 @@
       let aiTarget;
       if (ball.vx > 0) {
         const framesToReach = Math.min((ai.x - ball.x) / Math.max(ball.vx, 1), 60);
-        const predictedY = ball.y + ball.vy * framesToReach + 0.5 * GRAVITY * framesToReach * framesToReach;
+        const predictedY = ball.y + ball.vy * framesToReach;
         aiTarget = predictedY + (aiError ? (Math.random() - 0.5) * aiError : 0);
         const effectiveSpeed = ball.fireball ? aiSpeed * 0.85 : aiSpeed;
         if (ai.centerY < aiTarget - aiDeadzone) ai.y += Math.min(effectiveSpeed, aiTarget - ai.centerY);
