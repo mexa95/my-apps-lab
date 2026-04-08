@@ -73,7 +73,7 @@
         y: ((clientY - rect.top) / rect.height) * H
       };
     }
-    canvas.addEventListener('mousemove', e => {
+    document.addEventListener('mousemove', e => {
       const pos = getCanvasPos(e.clientX, e.clientY);
       if (gameState === 'playing') {
         mouseY = pos.y;
