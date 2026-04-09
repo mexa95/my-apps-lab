@@ -573,11 +573,10 @@
 
   function finishFlash() {
     const cleared = flashRows.length;
-    // Remove rows top-to-bottom
-    flashRows.slice().reverse().forEach(y => {
-      board.splice(y, 1);
-      board.unshift(Array(COLS).fill(0));
-    });
+    // Remove full rows bottom-to-top (so earlier indices stay valid)
+    flashRows.slice().reverse().forEach(y => board.splice(y, 1));
+    // Add empty rows at the top all at once
+    for (let i = 0; i < cleared; i++) board.unshift(Array(COLS).fill(0));
     flashRows = [];
     afterClear(cleared);
   }
