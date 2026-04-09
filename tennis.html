@@ -43,7 +43,9 @@
   <div id="mobile-hint">Touch &amp; drag to move paddle</div>
   <script>
     const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     const W = 1000, H = 600;
     canvas.width = W;
@@ -127,12 +129,17 @@
       }
       draw() {
         if (this.life <= 0 || this.radius <= 0) return;
+        const r = Math.max(0.5, this.radius);
+        ctx.save();
         ctx.globalAlpha = Math.max(0, this.life);
+        // Soft glow
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, Math.max(0, this.radius), 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
         ctx.fillStyle = this.color;
         ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.restore();
       }
     }
 
@@ -160,21 +167,39 @@
       reset() { this.active = false; this.spawnTimer = 0; this.pulse = 0; }
       draw() {
         if (!this.active) return;
-        const glowR = this.radius + Math.abs(Math.sin(this.pulse * 2.5)) * 5;
+        ctx.save();
+        const glowR = this.radius + Math.abs(Math.sin(this.pulse * 2.5)) * 6;
+        // Outer glow halo
+        const outerGlow = ctx.createRadialGradient(this.x, this.y, this.radius * 0.5, this.x, this.y, glowR + 8);
+        outerGlow.addColorStop(0, 'rgba(255,215,0,0.5)');
+        outerGlow.addColorStop(0.6, 'rgba(255,215,0,0.15)');
+        outerGlow.addColorStop(1, 'rgba(255,215,0,0)');
         ctx.beginPath();
-        ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(150,150,50,0.6)';
+        ctx.arc(this.x, this.y, glowR + 8, 0, Math.PI * 2);
+        ctx.fillStyle = outerGlow;
         ctx.fill();
+        // Main orb with gradient
+        const orbGrad = ctx.createRadialGradient(
+          this.x - 3, this.y - 3, 1,
+          this.x, this.y, this.radius
+        );
+        orbGrad.addColorStop(0, '#fff8dc');
+        orbGrad.addColorStop(0.4, '#ffe44d');
+        orbGrad.addColorStop(1, '#cca000');
+        ctx.shadowColor = POWERUP_COLOR;
+        ctx.shadowBlur = 18;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = POWERUP_COLOR;
+        ctx.fillStyle = orbGrad;
         ctx.fill();
+        ctx.shadowBlur = 0;
         // Star icon
-        ctx.fillStyle = '#a08000';
-        ctx.font = '14px sans-serif';
+        ctx.fillStyle = 'rgba(120,80,0,0.8)';
+        ctx.font = 'bold 16px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('★', this.x, this.y + 1);
+        ctx.restore();
       }
     }
 
@@ -183,7 +208,7 @@
         this.baseHeight = 100;
         this.x = x;
         this.y = H / 2 - 50;
-        this.w = 15;
+        this.w = 16;
         this.h = this.baseHeight;
         this.color = color;
         this.vy = 0;
@@ -210,23 +235,63 @@
         this.y = Math.max(minY, Math.min(this.y, maxY));
       }
       draw() {
-        // Shadow
-        ctx.fillStyle = 'rgba(10,40,20,0.7)';
-        ctx.fillRect(this.x + 6, this.y + 6, this.w, this.h);
-        // Glow if powered up
-        if (this.powerTimer > 0) {
-          ctx.strokeStyle = POWERUP_COLOR;
-          ctx.lineWidth = 2;
-          ctx.strokeRect(this.x - 2, this.y - 2, this.w + 4, this.h + 4);
-        }
+        const r = 5;
+        ctx.save();
+        // Drop shadow
+        ctx.shadowColor = 'rgba(0,0,0,0.45)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetX = 4;
+        ctx.shadowOffsetY = 4;
+        // Main paddle body
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, this.w, this.h, r);
         ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.w, this.h);
+        ctx.fill();
+        // Clear shadow for overlays
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        // 3D gradient overlay (light left edge, dark right edge)
+        const shadeGrad = ctx.createLinearGradient(this.x, 0, this.x + this.w, 0);
+        shadeGrad.addColorStop(0, 'rgba(255,255,255,0.28)');
+        shadeGrad.addColorStop(0.45, 'rgba(255,255,255,0.06)');
+        shadeGrad.addColorStop(1, 'rgba(0,0,0,0.22)');
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, this.w, this.h, r);
+        ctx.fillStyle = shadeGrad;
+        ctx.fill();
+        // Top-to-bottom subtle shading
+        const vGrad = ctx.createLinearGradient(0, this.y, 0, this.y + this.h);
+        vGrad.addColorStop(0, 'rgba(255,255,255,0.12)');
+        vGrad.addColorStop(0.5, 'rgba(0,0,0,0)');
+        vGrad.addColorStop(1, 'rgba(0,0,0,0.1)');
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, this.w, this.h, r);
+        ctx.fillStyle = vGrad;
+        ctx.fill();
+        // Edge highlight
+        ctx.beginPath();
+        ctx.roundRect(this.x + 0.5, this.y + 0.5, this.w - 1, this.h - 1, r);
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Power-up glow
+        if (this.powerTimer > 0) {
+          ctx.shadowColor = POWERUP_COLOR;
+          ctx.shadowBlur = 22;
+          ctx.beginPath();
+          ctx.roundRect(this.x - 3, this.y - 3, this.w + 6, this.h + 6, r + 3);
+          ctx.strokeStyle = POWERUP_COLOR;
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+        ctx.restore();
       }
     }
 
     class Ball {
       constructor() {
-        this.radius = 8;
+        this.radius = 10;
         this.trail = [];
         this.reset();
       }
@@ -258,19 +323,52 @@
         }
       }
       draw() {
+        // Shadow on the court surface
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(this.x + 3, this.y + 3, this.radius * 1.1, this.radius * 0.55, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fill();
+        // Motion trail with soft glow
         for (let i = 0; i < this.trail.length; i++) {
           const t = this.trail[i];
-          const size = Math.max(1, this.radius * (i / 10));
-          const c = Math.max(0, 255 - (10 - i) * 20);
+          const progress = i / this.trail.length;
+          const size = this.radius * progress * 0.85;
+          if (size < 0.5) continue;
+          const alpha = progress * 0.4;
           ctx.beginPath();
           ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
-          ctx.fillStyle = `rgb(${c},${Math.floor(c * 0.5)},0)`;
+          ctx.fillStyle = `rgba(255,180,50,${alpha})`;
           ctx.fill();
         }
+        // Main ball with radial gradient for 3D sphere look
+        const grad = ctx.createRadialGradient(
+          this.x - this.radius * 0.3, this.y - this.radius * 0.35, this.radius * 0.08,
+          this.x, this.y, this.radius
+        );
+        grad.addColorStop(0, '#ffe8a0');
+        grad.addColorStop(0.35, '#ffcc44');
+        grad.addColorStop(0.7, BALL_COLOR);
+        grad.addColorStop(1, '#b87800');
+        ctx.shadowColor = 'rgba(255,180,50,0.4)';
+        ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = BALL_COLOR;
+        ctx.fillStyle = grad;
         ctx.fill();
+        ctx.shadowBlur = 0;
+        // Crisp edge ring
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(160,100,0,0.35)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        // Specular highlight
+        ctx.beginPath();
+        ctx.arc(this.x - this.radius * 0.25, this.y - this.radius * 0.3, this.radius * 0.28, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.fill();
+        ctx.restore();
       }
     }
 
@@ -485,36 +583,100 @@
       ctx.fillStyle = BG;
       ctx.fillRect(0, 0, W, H);
 
-      ctx.fillStyle = TABLE;
+      // Table surface with radial gradient for depth & lighting
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = 30;
+      ctx.shadowOffsetY = 6;
+      const tableGrad = ctx.createRadialGradient(W / 2, H / 2, 60, W / 2, H / 2, 520);
+      tableGrad.addColorStop(0, '#1fa84e');
+      tableGrad.addColorStop(0.6, '#18793a');
+      tableGrad.addColorStop(1, '#115a2a');
+      ctx.fillStyle = tableGrad;
       ctx.fillRect(40, 50, W - 80, H - 100);
-      ctx.strokeStyle = '#c8c8c8';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(40, 50, W - 80, H - 100);
+      ctx.restore();
 
-      ctx.setLineDash([8, 8]);
+      // Subtle surface texture (faint noise lines)
+      ctx.save();
+      ctx.globalAlpha = 0.03;
+      for (let ly = 55; ly < H - 50; ly += 6) {
+        ctx.beginPath();
+        ctx.moveTo(42, ly);
+        ctx.lineTo(W - 42, ly);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+
+      // Table border — outer frame with bevel
+      ctx.strokeStyle = '#d4d0b8';
+      ctx.lineWidth = 3.5;
+      ctx.strokeRect(40, 50, W - 80, H - 100);
+      // Inner bevel highlight
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(42, 52, W - 84, H - 104);
+
+      // White court boundary line
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(56, 62, W - 112, H - 124);
+
+      // Center net
+      ctx.save();
+      const netX = W / 2;
+      // Net posts (small metallic rectangles)
+      const postGrad = ctx.createLinearGradient(netX - 3, 0, netX + 3, 0);
+      postGrad.addColorStop(0, '#c0c0c0');
+      postGrad.addColorStop(0.5, '#e8e8e8');
+      postGrad.addColorStop(1, '#909090');
+      ctx.fillStyle = postGrad;
+      ctx.fillRect(netX - 3, 43, 6, 11);
+      ctx.fillRect(netX - 3, H - 54, 6, 11);
+      // Net cord (top white line)
       ctx.beginPath();
-      ctx.moveTo(W / 2, 50);
-      ctx.lineTo(W / 2, H - 50);
-      ctx.strokeStyle = 'rgba(200,200,200,0.5)';
+      ctx.moveTo(netX, 50);
+      ctx.lineTo(netX, H - 50);
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
       ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.setLineDash([]);
+      // Net mesh horizontal lines
+      ctx.strokeStyle = 'rgba(200,200,200,0.12)';
+      ctx.lineWidth = 0.7;
+      for (let ny = 58; ny < H - 50; ny += 10) {
+        ctx.beginPath();
+        ctx.moveTo(netX - 7, ny);
+        ctx.lineTo(netX + 7, ny);
+        ctx.stroke();
+      }
+      ctx.restore();
 
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = '#fff';
-      ctx.font = '60px Impact, Arial Black, sans-serif';
+      // Score display
+      ctx.save();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
+      // Score numbers with subtle text shadow
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 4;
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#fff';
+      ctx.font = '60px Impact, Arial Black, sans-serif';
       ctx.fillText(`${scoreUser}     ${scoreAI}`, W / 2, 8);
       ctx.globalAlpha = 1;
-
-      ctx.font = '14px sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.shadowBlur = 0;
+      // Player labels
+      ctx.font = 'bold 12px sans-serif';
+      ctx.letterSpacing = '2px';
+      ctx.fillStyle = 'rgba(220,50,50,0.4)';
       ctx.textAlign = 'left';
-      ctx.fillText('YOU', 52, 32);
+      ctx.fillText('YOU', 52, 34);
+      ctx.fillStyle = 'rgba(50,100,220,0.4)';
       ctx.textAlign = 'right';
-      ctx.fillText('AI', W - 52, 32);
+      ctx.fillText('AI', W - 52, 34);
       ctx.textAlign = 'center';
+      ctx.restore();
 
       powerup.draw();
       user.draw();
@@ -523,24 +685,31 @@
       particles.forEach(p => p.draw());
 
       if (gameState === 'gameover') {
-        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(0, 0, W, H);
 
         const isWin = winner === 'user';
+        ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
+        // Title with glow
+        const winColor = isWin ? '#00e5a0' : '#ff4444';
+        ctx.shadowColor = winColor;
+        ctx.shadowBlur = 30;
         ctx.font = 'bold 80px Impact, Arial Black, sans-serif';
-        ctx.fillStyle = isWin ? '#00e5a0' : '#ff4444';
+        ctx.fillStyle = winColor;
         ctx.fillText(isWin ? 'YOU WIN!' : 'YOU LOSE', W / 2, H / 2 - 60);
+        ctx.shadowBlur = 0;
 
         ctx.font = '36px Impact, Arial Black, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 + 10);
 
-        ctx.font = '18px sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '17px sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
         ctx.fillText('Tap or press Enter to go back to menu', W / 2, H / 2 + 70);
+        ctx.restore();
         return;
       }
 
