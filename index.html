@@ -136,6 +136,7 @@
     .card:nth-child(4) { animation-delay: 0.5s; }
     .card:nth-child(5) { animation-delay: 0.6s; }
     .card:nth-child(6) { animation-delay: 0.7s; }
+    .card:nth-child(7) { animation-delay: 0.8s; }
 
     .card::before {
       content: '';
@@ -285,7 +286,7 @@
 
     <div class="stats">
       <div class="stat">
-        <div class="stat-value" id="app-count">7</div>
+        <div class="stat-value" id="app-count">8</div>
         <div class="stat-label">Apps Live</div>
       </div>
       <div class="stat">
@@ -352,6 +353,14 @@
         <div class="card-icon" style="background: linear-gradient(135deg, rgba(0,229,160,0.15), rgba(168,85,247,0.15));">🧠</div>
         <h3>Memory Matrix</h3>
         <p>Pattern recall game — memorize lit tiles on a grid, then click them back. Combos, levels, 3 difficulties.</p>
+        <div class="card-status status-live">Live</div>
+      </div>
+
+      <!-- Spore -->
+      <div class="card" onclick="window.open('/spore.html', '_self')">
+        <div class="card-icon" style="background: linear-gradient(135deg, rgba(179,136,255,0.15), rgba(244,143,177,0.15));">🍄</div>
+        <h3>Spore</h3>
+        <p>Psychedelic chain reaction — click to burst glowing spores and watch cascading explosions across a living garden.</p>
         <div class="card-status status-live">Live</div>
       </div>
 

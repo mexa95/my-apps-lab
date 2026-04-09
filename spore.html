@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spore - Mehran's Playground</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0808;overflow:hidden;font-family:'DM Sans',sans-serif;cursor:crosshair;user-select:none}
+canvas{display:block}
+.back-btn{position:fixed;top:20px;left:20px;font-family:'Space Mono',monospace;font-size:.75rem;color:#6a6a6a;text-decoration:none;letter-spacing:1px;z-index:200;transition:color .3s}.back-btn:hover{color:#b388ff}
+#ui{position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:100;display:flex;flex-direction:column;align-items:center;padding-top:20px}
+.hud{display:flex;gap:36px;font-family:'Space Mono',monospace;text-align:center}
+.hud-item .val{font-size:1.5rem;font-weight:700;transition:all .3s}.hud-item .lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:2px;color:#6a5a70;margin-top:2px}
+.val-level{color:#b388ff}.val-score{color:#ffab40}.val-clicks{color:#69f0ae}.val-target{color:#f48fb1}
+#msg{font-family:'Space Mono',monospace;font-size:.9rem;color:#b388ff;margin-top:12px;opacity:0;transition:opacity .5s}
+#msg.show{opacity:1}
+#overlay{position:fixed;inset:0;z-index:150;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,8,8,.85);backdrop-filter:blur(8px);transition:opacity .5s;pointer-events:auto}
+#overlay.hidden{opacity:0;pointer-events:none}
+#overlay h1{font-family:'Space Mono',monospace;font-size:clamp(2rem,6vw,3.5rem);background:linear-gradient(135deg,#b388ff,#f48fb1,#ffab40);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+#overlay .sub{color:#8a7a90;font-size:.9rem;margin-bottom:32px;text-align:center;max-width:400px;line-height:1.6}
+.btn{font-family:'Space Mono',monospace;font-size:.8rem;letter-spacing:1px;text-transform:uppercase;padding:14px 40px;border:1px solid #b388ff;border-radius:4px;background:transparent;color:#b388ff;cursor:pointer;transition:all .3s;pointer-events:auto}
+.btn:hover{background:#b388ff;color:#0a0808;box-shadow:0 0 30px rgba(179,136,255,.3)}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0;width:260px}
+.stat-box{background:rgba(179,136,255,.08);border:1px solid rgba(179,136,255,.15);border-radius:8px;padding:14px;text-align:center}
+.stat-box .v{font-family:'Space Mono',monospace;font-size:1.4rem;font-weight:700;color:#b388ff}
+.stat-box .l{font-family:'Space Mono',monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:1.5px;color:#6a5a70;margin-top:4px}
+.new-hs{font-family:'Space Mono',monospace;font-size:.75rem;color:#ffab40;border:1px solid #ffab40;padding:6px 16px;border-radius:2px;margin-bottom:12px;animation:glow 1.5s ease-in-out infinite alternate}
+.how{background:rgba(179,136,255,.06);border:1px solid rgba(179,136,255,.1);border-radius:8px;padding:20px;max-width:380px;margin-top:20px;text-align:left}
+.how h3{font-family:'Space Mono',monospace;font-size:.8rem;color:#b388ff;margin-bottom:10px}
+.how ol{color:#8a7a90;font-size:.78rem;line-height:1.9;padding-left:18px}
+.how li::marker{color:#b388ff;font-family:'Space Mono',monospace}
+@keyframes glow{from{box-shadow:0 0 4px rgba(255,171,64,.2)}to{box-shadow:0 0 16px rgba(255,171,64,.4)}}
+</style>
+</head>
+<body>
+<a href="/" class="back-btn">&larr; Back</a>
+<div id="ui">
+  <div class="hud">
+    <div class="hud-item"><div class="val val-level" id="hLevel">1</div><div class="lbl">Level</div></div>
+    <div class="hud-item"><div class="val val-score" id="hScore">0</div><div class="lbl">Score</div></div>
+    <div class="hud-item"><div class="val val-clicks" id="hClicks">1</div><div class="lbl">Clicks</div></div>
+    <div class="hud-item"><div class="val val-target" id="hTarget">3</div><div class="lbl">Target</div></div>
+  </div>
+  <div id="msg"></div>
+</div>
+<div id="overlay">
+  <h1>Spore</h1>
+  <div class="sub">Click to release a burst of energy. Watch it cascade through the floating spores. Pop enough to advance.</div>
+  <button class="btn" id="startBtn">Enter the Garden</button>
+  <div class="how">
+    <h3>How to Play</h3>
+    <ol>
+      <li>Glowing spores float in the void</li>
+      <li>Click to create an expanding burst</li>
+      <li>Spores caught in a burst pop and chain-react</li>
+      <li>Reach the target number to pass each level</li>
+      <li>Fewer clicks, bigger chains = more points</li>
+    </ol>
+  </div>
+</div>
+<div id="overlay2" class="hidden" style="position:fixed;inset:0;z-index:150;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,8,8,.85);backdrop-filter:blur(8px);transition:opacity .5s;pointer-events:auto">
+</div>
+<canvas id="c"></canvas>
+<script>
+const canvas=document.getElementById('c'),cx=canvas.getContext('2d');
+const $level=document.getElementById('hLevel'),$score=document.getElementById('hScore'),
+      $clicks=document.getElementById('hClicks'),$target=document.getElementById('hTarget'),
+      $msg=document.getElementById('msg'),$overlay=document.getElementById('overlay'),
+      $overlay2=document.getElementById('overlay2');
+
+let W,H;
+function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}
+addEventListener('resize',resize);resize();
+
+// Colors - earthy psychedelic palette
+const PALETTE=[
+  {h:270,s:80,l:72,name:'violet'},   // #b388ff vibe
+  {h:30,s:100,l:63,name:'amber'},     // warm amber
+  {h:160,s:80,l:68,name:'teal'},      // bioluminescent teal
+  {h:340,s:80,l:72,name:'pink'},      // coral pink
+  {h:80,s:70,l:55,name:'moss'},       // moss green
+  {h:200,s:70,l:65,name:'sky'},       // sky blue
+];
+function hsl(p,a=1){return `hsla(${p.h},${p.s}%,${p.l}%,${a})`}
+
+// Audio
+let actx;
+function ensureAudio(){if(!actx)actx=new(AudioContext||webkitAudioContext)()}
+function tone(f,dur=.12,type='sine',vol=.1){
+  ensureAudio();
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type=type;o.frequency.value=f;
+  g.gain.setValueAtTime(vol,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);
+  o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+dur);
+}
+function popSound(i){
+  const base=300+i*60;
+  tone(base,.15,'sine',.08);
+  setTimeout(()=>tone(base*1.5,.1,'sine',.06),50);
+}
+function chainSound(depth){
+  const f=400+depth*80;
+  tone(f,.2,'sine',.07);
+  setTimeout(()=>tone(f*1.25,.15,'triangle',.05),40);
+}
+function winSound(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.25,'sine',.08),i*120))}
+function failSound(){[350,280,220].forEach((f,i)=>setTimeout(()=>tone(f,.3,'sawtooth',.06),i*140))}
+
+// Game state
+let spores=[],bursts=[],particles=[],mycelium=[];
+let level=1,score=0,clicksLeft=0,target=0,popped=0,phase='menu',totalPopped=0,bestCombo=0,highScore=parseInt(localStorage.getItem('sporeHigh')||'0');
+let bgHue=270,bgPhase=0;
+
+// Level config
+function levelConfig(lv){
+  const count=Math.min(10+lv*4,80);
+  const clicks=Math.max(1,Math.ceil(lv/3));
+  const tgt=Math.min(Math.floor(count*.4)+lv,count-2);
+  return{count,clicks,target:tgt};
+}
+
+// Spore class
+function makeSpore(){
+  const pal=PALETTE[Math.floor(Math.random()*PALETTE.length)];
+  const r=12+Math.random()*14;
+  return{
+    x:r+Math.random()*(W-2*r),y:r+Math.random()*(H-2*r),
+    vx:(Math.random()-.5)*.6,vy:(Math.random()-.5)*.6,
+    r,baseR:r,pal,alive:true,popTime:0,
+    phase:Math.random()*Math.PI*2,pulseSpeed:.5+Math.random()*.8,
+    wobbleX:Math.random()*Math.PI*2,wobbleY:Math.random()*Math.PI*2,
+    tentacles:Array.from({length:3+Math.floor(Math.random()*4)},()=>({angle:Math.random()*Math.PI*2,len:r*.8+Math.random()*r*.6,phase:Math.random()*Math.PI*2})),
+  };
+}
+
+function spawnSpores(n){
+  spores=[];
+  for(let i=0;i<n;i++) spores.push(makeSpore());
+}
+
+// Burst (expanding ring)
+function makeBurst(x,y){
+  return{x,y,r:0,maxR:90+level*5,speed:1.8+level*.1,alpha:1,chainDepth:0};
+}
+
+function makeChainBurst(x,y,depth){
+  return{x,y,r:0,maxR:60+level*3,speed:1.5+level*.08,alpha:1,chainDepth:depth};
+}
+
+// Particles
+function spawnParticles(x,y,pal,n=15){
+  for(let i=0;i<n;i++){
+    const a=Math.PI*2*Math.random(),sp=1+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,decay:.01+Math.random()*.02,
+      size:2+Math.random()*4,pal,trail:[]});
+  }
+}
+
+// Mycelium lines (background decoration)
+function generateMycelium(){
+  mycelium=[];
+  const count=15+level*3;
+  for(let i=0;i<count;i++){
+    const pts=[{x:Math.random()*W,y:Math.random()*H}];
+    let steps=5+Math.floor(Math.random()*8);
+    let angle=Math.random()*Math.PI*2;
+    for(let s=0;s<steps;s++){
+      const last=pts[pts.length-1];
+      angle+=(.5-Math.random())*1.2;
+      const dist=20+Math.random()*40;
+      pts.push({x:last.x+Math.cos(angle)*dist,y:last.y+Math.sin(angle)*dist});
+    }
+    mycelium.push({pts,alpha:.03+Math.random()*.05,hue:260+Math.random()*60,phase:Math.random()*Math.PI*2});
+  }
+}
+
+// Start level
+function startLevel(){
+  const conf=levelConfig(level);
+  clicksLeft=conf.clicks;target=conf.target;popped=0;
+  spawnSpores(conf.count);bursts=[];particles=[];
+  generateMycelium();
+  phase='playing';
+  updateHUD();
+  showMsg(`Level ${level} — Pop ${target} spores`);
+}
+
+// HUD
+function updateHUD(){
+  $level.textContent=level;$score.textContent=score;
+  $clicks.textContent=clicksLeft;$target.textContent=`${popped}/${target}`;
+}
+
+function showMsg(t,dur=2000){
+  $msg.textContent=t;$msg.classList.add('show');
+  setTimeout(()=>$msg.classList.remove('show'),dur);
+}
+
+// Click handler
+canvas.addEventListener('click',e=>{
+  if(phase!=='playing')return;
+  if(clicksLeft<=0)return;
+  ensureAudio();
+  clicksLeft--;
+  bursts.push(makeBurst(e.clientX,e.clientY));
+  tone(220,.2,'sine',.06);
+  updateHUD();
+});
+
+// Game loop
+let lastTime=0;
+function update(ts){
+  const dt=Math.min((ts-lastTime)/16.67,3);
+  lastTime=ts;
+
+  // Background
+  bgPhase+=.003*dt;
+  bgHue=270+Math.sin(bgPhase)*30;
+
+  // Update spores
+  for(const s of spores){
+    if(!s.alive)continue;
+    s.phase+=.02*s.pulseSpeed*dt;
+    s.wobbleX+=.008*dt;s.wobbleY+=.01*dt;
+    s.x+=s.vx*dt+Math.sin(s.wobbleX)*.15;
+    s.y+=s.vy*dt+Math.cos(s.wobbleY)*.15;
+    s.r=s.baseR+Math.sin(s.phase)*2;
+    // Bounce
+    if(s.x<s.r){s.x=s.r;s.vx*=-1}
+    if(s.x>W-s.r){s.x=W-s.r;s.vx*=-1}
+    if(s.y<s.r){s.y=s.r;s.vy*=-1}
+    if(s.y>H-s.r){s.y=H-s.r;s.vy*=-1}
+  }
+
+  // Update bursts & check collisions
+  let combo=0;
+  for(let i=bursts.length-1;i>=0;i--){
+    const b=bursts[i];
+    b.r+=b.speed*dt;
+    b.alpha=Math.max(0,1-b.r/b.maxR);
+    if(b.r>=b.maxR){bursts.splice(i,1);continue}
+    // Check spore collisions
+    for(const s of spores){
+      if(!s.alive)continue;
+      const dx=s.x-b.x,dy=s.y-b.y,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<b.r+s.r&&dist>b.r-s.r-10){
+        s.alive=false;s.popTime=ts;
+        popped++;totalPopped++;combo++;
+        const pts=10*(b.chainDepth+1);
+        score+=pts;
+        if(b.chainDepth+1>bestCombo)bestCombo=b.chainDepth+1;
+        spawnParticles(s.x,s.y,s.pal,12+b.chainDepth*3);
+        bursts.push(makeChainBurst(s.x,s.y,b.chainDepth+1));
+        chainSound(b.chainDepth);
+        updateHUD();
+      }
+    }
+  }
+
+  // Update particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.trail.push({x:p.x,y:p.y,a:p.life});
+    if(p.trail.length>8)p.trail.shift();
+    p.x+=p.vx*dt;p.y+=p.vy*dt;
+    p.vy+=.03*dt;p.vx*=.99;
+    p.life-=p.decay*dt;
+    if(p.life<=0)particles.splice(i,1);
+  }
+
+  // Check level end conditions
+  if(phase==='playing'&&clicksLeft<=0&&bursts.length===0){
+    if(popped>=target){
+      phase='win';
+      winSound();
+      const bonus=clicksLeft*50+(popped-target)*20;
+      score+=bonus;
+      updateHUD();
+      showMsg(`Level ${level} Complete! +${bonus} bonus`,2500);
+      setTimeout(()=>{level++;startLevel()},2500);
+    }else{
+      phase='lose';
+      failSound();
+      setTimeout(()=>showGameOver(),1500);
+    }
+  }
+
+  requestAnimationFrame(update);
+  draw(ts);
+}
+
+function draw(ts){
+  // Background gradient
+  const grad=cx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.7);
+  grad.addColorStop(0,`hsla(${bgHue},30%,8%,1)`);
+  grad.addColorStop(.5,`hsla(${bgHue-20},20%,5%,1)`);
+  grad.addColorStop(1,`hsla(${bgHue-40},15%,3%,1)`);
+  cx.fillStyle=grad;cx.fillRect(0,0,W,H);
+
+  // Mycelium
+  for(const m of mycelium){
+    const a=m.alpha+Math.sin(ts*.0005+m.phase)*.02;
+    cx.strokeStyle=`hsla(${m.hue},40%,50%,${a})`;
+    cx.lineWidth=1;cx.beginPath();
+    cx.moveTo(m.pts[0].x,m.pts[0].y);
+    for(let i=1;i<m.pts.length;i++){
+      const prev=m.pts[i-1],cur=m.pts[i];
+      const mx=(prev.x+cur.x)/2,my=(prev.y+cur.y)/2;
+      cx.quadraticCurveTo(prev.x,prev.y,mx,my);
+    }
+    cx.stroke();
+    // Nodes at junctions
+    for(const p of m.pts){
+      cx.fillStyle=`hsla(${m.hue},50%,60%,${a*.8})`;
+      cx.beginPath();cx.arc(p.x,p.y,1.5,0,Math.PI*2);cx.fill();
+    }
+  }
+
+  // Floating ambient spore dust
+  for(let i=0;i<3;i++){
+    const px=(ts*.01+i*400)%W,py=(H-((ts*.008+i*300)%H));
+    const da=.03+Math.sin(ts*.001+i)*.02;
+    cx.fillStyle=`hsla(${270+i*40},60%,70%,${da})`;
+    cx.beginPath();cx.arc(px,py,2,0,Math.PI*2);cx.fill();
+  }
+
+  // Draw spores
+  for(const s of spores){
+    if(!s.alive)continue;
+    const glow=.3+Math.sin(s.phase)*.15;
+
+    // Outer glow
+    const g=cx.createRadialGradient(s.x,s.y,s.r*.3,s.x,s.y,s.r*2.5);
+    g.addColorStop(0,hsl(s.pal,glow*.4));
+    g.addColorStop(1,hsl(s.pal,0));
+    cx.fillStyle=g;cx.beginPath();cx.arc(s.x,s.y,s.r*2.5,0,Math.PI*2);cx.fill();
+
+    // Tentacles / filaments
+    cx.lineWidth=1.2;
+    for(const t of s.tentacles){
+      t.phase+=.015;
+      const ax=s.x+Math.cos(t.angle+Math.sin(t.phase)*.3)*t.len;
+      const ay=s.y+Math.sin(t.angle+Math.sin(t.phase)*.3)*t.len;
+      const cpx=s.x+Math.cos(t.angle+.5)*t.len*.5+Math.sin(t.phase*1.3)*5;
+      const cpy=s.y+Math.sin(t.angle+.5)*t.len*.5+Math.cos(t.phase*1.1)*5;
+      cx.strokeStyle=hsl(s.pal,.15+glow*.2);
+      cx.beginPath();cx.moveTo(s.x,s.y);cx.quadraticCurveTo(cpx,cpy,ax,ay);cx.stroke();
+      // Tip dot
+      cx.fillStyle=hsl(s.pal,.3);cx.beginPath();cx.arc(ax,ay,1.5,0,Math.PI*2);cx.fill();
+    }
+
+    // Main body - mushroom cap shape
+    const capGrad=cx.createRadialGradient(s.x-s.r*.2,s.y-s.r*.2,0,s.x,s.y,s.r);
+    capGrad.addColorStop(0,`hsla(${s.pal.h},${s.pal.s}%,${s.pal.l+15}%,${.7+glow})`);
+    capGrad.addColorStop(.6,hsl(s.pal,.6+glow));
+    capGrad.addColorStop(1,`hsla(${s.pal.h},${s.pal.s}%,${s.pal.l-10}%,.3)`);
+    cx.fillStyle=capGrad;
+    cx.beginPath();cx.arc(s.x,s.y,s.r,0,Math.PI*2);cx.fill();
+
+    // Inner bright spot
+    cx.fillStyle=`hsla(${s.pal.h},${s.pal.s-10}%,${s.pal.l+25}%,${.3+glow*.3})`;
+    cx.beginPath();cx.arc(s.x-s.r*.15,s.y-s.r*.15,s.r*.35,0,Math.PI*2);cx.fill();
+
+    // Speckles on cap
+    const seed=s.baseR*100;
+    for(let i=0;i<3;i++){
+      const sx=s.x+Math.cos(seed+i*2.1)*s.r*.4;
+      const sy=s.y+Math.sin(seed+i*2.1)*s.r*.4;
+      cx.fillStyle=`hsla(${s.pal.h+20},${s.pal.s}%,${s.pal.l+20}%,.2)`;
+      cx.beginPath();cx.arc(sx,sy,s.r*.1,0,Math.PI*2);cx.fill();
+    }
+  }
+
+  // Draw bursts
+  for(const b of bursts){
+    const hue=270+b.chainDepth*40;
+    // Outer ring
+    cx.strokeStyle=`hsla(${hue},70%,70%,${b.alpha*.6})`;
+    cx.lineWidth=3+b.chainDepth;
+    cx.beginPath();cx.arc(b.x,b.y,b.r,0,Math.PI*2);cx.stroke();
+    // Inner glow
+    const ig=cx.createRadialGradient(b.x,b.y,b.r*.5,b.x,b.y,b.r);
+    ig.addColorStop(0,`hsla(${hue},60%,60%,${b.alpha*.08})`);
+    ig.addColorStop(1,`hsla(${hue},60%,60%,0)`);
+    cx.fillStyle=ig;cx.beginPath();cx.arc(b.x,b.y,b.r,0,Math.PI*2);cx.fill();
+    // Psychedelic secondary ring
+    if(b.chainDepth>0){
+      cx.strokeStyle=`hsla(${hue+60},80%,75%,${b.alpha*.3})`;
+      cx.lineWidth=1;
+      cx.beginPath();cx.arc(b.x,b.y,b.r*.7,0,Math.PI*2);cx.stroke();
+    }
+  }
+
+  // Draw particles with trails
+  for(const p of particles){
+    // Trail
+    for(let i=0;i<p.trail.length;i++){
+      const t=p.trail[i];
+      const a=t.a*(i/p.trail.length)*.4;
+      cx.fillStyle=hsl(p.pal,a);
+      cx.beginPath();cx.arc(t.x,t.y,p.size*(i/p.trail.length)*p.life,0,Math.PI*2);cx.fill();
+    }
+    // Main particle
+    cx.fillStyle=hsl(p.pal,p.life);
+    cx.beginPath();cx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);cx.fill();
+    // Glow
+    cx.fillStyle=hsl(p.pal,p.life*.3);
+    cx.beginPath();cx.arc(p.x,p.y,p.size*p.life*2,0,Math.PI*2);cx.fill();
+  }
+
+  // Vignette
+  const vig=cx.createRadialGradient(W/2,H/2,W*.25,W/2,H/2,W*.75);
+  vig.addColorStop(0,'transparent');
+  vig.addColorStop(1,'rgba(5,3,3,.5)');
+  cx.fillStyle=vig;cx.fillRect(0,0,W,H);
+}
+
+// Game over screen
+function showGameOver(){
+  const isHS=score>highScore;
+  if(isHS){highScore=score;localStorage.setItem('sporeHigh',score.toString())}
+  $overlay2.innerHTML=`
+    <h1 style="font-family:'Space Mono',monospace;font-size:clamp(1.5rem,5vw,2.5rem);background:linear-gradient(135deg,#b388ff,#f48fb1,#ffab40);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px">Garden Withered</h1>
+    ${isHS?'<div class="new-hs">New High Score!</div>':''}
+    <div class="stats-grid">
+      <div class="stat-box"><div class="v">${score}</div><div class="l">Score</div></div>
+      <div class="stat-box"><div class="v">${level}</div><div class="l">Level</div></div>
+      <div class="stat-box"><div class="v">${totalPopped}</div><div class="l">Popped</div></div>
+      <div class="stat-box"><div class="v">${highScore}</div><div class="l">Best</div></div>
+    </div>
+    <button class="btn" onclick="resetGame()">Regrow</button>
+  `;
+  $overlay2.classList.remove('hidden');
+}
+
+function resetGame(){
+  level=1;score=0;totalPopped=0;bestCombo=0;
+  $overlay2.classList.add('hidden');
+  startLevel();
+}
+
+// Init
+document.getElementById('startBtn').addEventListener('click',()=>{
+  $overlay.classList.add('hidden');
+  startLevel();
+});
+
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
