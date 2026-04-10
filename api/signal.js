@@ -63,7 +63,17 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     // Diagnostic: show which KV-related env var *names* are present (never
     // values). Lets the user hit /api/signal in a browser to confirm whether
-    // the KV store is actually wired into this deployment.
+    // the KV store is actually wired into this deployment. `presentNames`
+    // lists every env var with a database-ish prefix so we can spot custom
+    // names (e.g. KV_URL, REDIS_URL) that aren't in our fallback list.
+    const presentNames = Object.keys(process.env).filter(k =>
+      k.startsWith('KV_') ||
+      k.startsWith('UPSTASH_') ||
+      k.startsWith('REDIS_') ||
+      k.startsWith('DATABASE_') ||
+      k.startsWith('POSTGRES_') ||
+      k === 'REDIS_URL'
+    ).sort();
     return res.status(200).json({
       ok: true,
       service: 'tennis-signal',
@@ -72,7 +82,8 @@ export default async function handler(req, res) {
         KV_REST_API_TOKEN:        !!process.env.KV_REST_API_TOKEN,
         UPSTASH_REDIS_REST_URL:   !!process.env.UPSTASH_REDIS_REST_URL,
         UPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
-      }
+      },
+      presentNames,
     });
   }
 
