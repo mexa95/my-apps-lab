@@ -41,6 +41,25 @@
 <body>
   <canvas id="game"></canvas>
   <div id="mobile-hint">Touch &amp; drag to move paddle</div>
+  <!--
+    Hidden text field used ONLY to pop the mobile soft keyboard on the
+    join-code screen. It's not display:none (mobile browsers will refuse
+    to focus a hidden input); instead it's positioned off-screen but
+    remains focusable. See handleTap + JOIN GAME button handler for the
+    focus() calls that open the keyboard.
+  -->
+  <input
+    id="join-input"
+    type="text"
+    inputmode="text"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="characters"
+    spellcheck="false"
+    maxlength="4"
+    aria-label="Room code"
+    style="position:fixed; top:-100px; left:-100px; width:40px; height:40px; opacity:0; pointer-events:none;"
+  />
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -70,6 +89,37 @@
     let netMode = 'local'; // 'local' | 'host' | 'guest'
     let menuScreen = 'main'; // main|onlineChoice|onlineHostWait|onlineJoinInput|onlineConnecting|onlineError
     let joinCodeInput = '';
+
+    // Hidden mobile-keyboard input for the room-code entry screen.
+    // On mobile, focus() must be called from within a user-gesture handler
+    // (touchend/click) — see handleTap and the JOIN GAME button action.
+    const joinInput = document.getElementById('join-input');
+    function focusJoinInput() {
+      // pointer-events:none is lifted only while focus is needed so the
+      // element stays click-transparent when off-screen.
+      joinInput.style.pointerEvents = 'auto';
+      joinInput.value = joinCodeInput;
+      try { joinInput.focus({ preventScroll: true }); } catch { joinInput.focus(); }
+    }
+    function blurJoinInput() {
+      joinInput.blur();
+      joinInput.value = '';
+      joinInput.style.pointerEvents = 'none';
+    }
+    joinInput.addEventListener('input', () => {
+      // Filter to [A-Z0-9], uppercase, cap at 4. Keep joinCodeInput and the
+      // input element in sync so re-focusing never clobbers typed chars.
+      const cleaned = joinInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+      joinCodeInput = cleaned;
+      if (joinInput.value !== cleaned) joinInput.value = cleaned;
+    });
+    // Enter on the mobile keyboard submits the join.
+    joinInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && menuScreen === 'onlineJoinInput' && joinCodeInput.length === 4) {
+        e.preventDefault();
+        net.join(joinCodeInput);
+      }
+    });
 
     // Input
     let mouseY = H / 2;
@@ -104,26 +154,15 @@
     }, { passive: false });
     canvas.addEventListener('click', e => handleTap(e.clientX, e.clientY));
     document.addEventListener('keydown', e => {
-      // Room-code entry on join screen
+      // Room-code entry: character/backspace/Enter are handled natively by
+      // the hidden <input id="join-input"> and its own event listeners. We
+      // only need Escape here to cancel back to the online-choice screen.
       if (gameState === 'menu' && menuScreen === 'onlineJoinInput') {
-        if (e.key === 'Backspace') {
-          joinCodeInput = joinCodeInput.slice(0, -1);
-          e.preventDefault();
-          return;
-        }
-        if (e.key === 'Enter') {
-          if (joinCodeInput.length === 4) net.join(joinCodeInput);
-          return;
-        }
         if (e.key === 'Escape') {
           menuScreen = 'onlineChoice';
           joinCodeInput = '';
-          return;
-        }
-        if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && joinCodeInput.length < 4) {
-          joinCodeInput += e.key.toUpperCase();
+          blurJoinInput();
           e.preventDefault();
-          return;
         }
         return;
       }
@@ -437,11 +476,20 @@
     function handleTap(clientX, clientY) {
       const pos = getCanvasPos(clientX, clientY);
       if (gameState === 'menu') {
+        let hit = false;
         for (const btn of menuButtons) {
           if (pos.x >= btn.x && pos.x <= btn.x + btn.w && pos.y >= btn.y && pos.y <= btn.y + btn.h) {
             btn.action();
+            hit = true;
             break;
           }
+        }
+        // If the user is on the join-code screen and tapped somewhere that
+        // isn't a button (e.g. on the code boxes to re-open a dismissed
+        // mobile keyboard), re-focus the hidden input. Must run in the
+        // touchend/click user-gesture stack for focus() to work on mobile.
+        if (!hit && menuScreen === 'onlineJoinInput') {
+          focusJoinInput();
         }
       } else if (gameState === 'gameover') {
         showMenu();
@@ -590,7 +638,10 @@
       ctx.fillText('Enter an opponent\u2019s room code', W / 2, jy + bh / 2 + 18);
       menuButtons.push({
         x: jx, y: jy, w: bw, h: bh,
-        action: () => { menuScreen = 'onlineJoinInput'; joinCodeInput = ''; }
+        // focus() must run inside the user-gesture stack (touchend/click)
+        // to open the mobile soft keyboard — that's why it's in the action
+        // callback rather than in a state-transition helper elsewhere.
+        action: () => { menuScreen = 'onlineJoinInput'; joinCodeInput = ''; focusJoinInput(); }
       });
 
       drawBackButton('\u2190 BACK', () => { menuScreen = 'main'; });
@@ -669,10 +720,10 @@
       ctx.fillText('JOIN', jx + jw / 2, jy + jh / 2 + 1);
       menuButtons.push({
         x: jx, y: jy, w: jw, h: jh,
-        action: () => { if (ready) net.join(joinCodeInput); }
+        action: () => { if (ready) { blurJoinInput(); net.join(joinCodeInput); } }
       });
 
-      drawBackButton('\u2190 BACK', () => { menuScreen = 'onlineChoice'; joinCodeInput = ''; });
+      drawBackButton('\u2190 BACK', () => { menuScreen = 'onlineChoice'; joinCodeInput = ''; blurJoinInput(); });
     }
 
     function drawOnlineConnecting() {
@@ -1421,6 +1472,7 @@
       netMode = 'local';
       menuScreen = 'main';
       joinCodeInput = '';
+      blurJoinInput();
       gameState = 'menu';
       winner = null;
       canvas.style.cursor = 'default';
