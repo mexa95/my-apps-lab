@@ -1,7 +1,28 @@
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
 
 // WebRTC signaling via Vercel KV for tennis online multiplayer.
 // Single POST endpoint with an `op` discriminator. All keys TTL 300s.
+
+// Resilient KV client: supports both legacy KV_REST_API_* env vars and the
+// Upstash-backed marketplace integration (UPSTASH_REDIS_REST_*). The default
+// `kv` export only checks the legacy names and throws at module load if
+// they're missing, so we construct lazily per request and surface a clear
+// error listing which KV-related env vars are actually present.
+function getKv() {
+  const url   = process.env.KV_REST_API_URL   || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    const present = Object.keys(process.env).filter(k =>
+      k.startsWith('KV_') || k.startsWith('UPSTASH_') || k === 'REDIS_URL'
+    );
+    throw new Error(
+      `No KV env vars found. Expected KV_REST_API_URL+KV_REST_API_TOKEN ` +
+      `or UPSTASH_REDIS_REST_URL+UPSTASH_REDIS_REST_TOKEN. ` +
+      `KV/UPSTASH-related vars present: ${JSON.stringify(present)}`
+    );
+  }
+  return createClient({ url, token });
+}
 
 const ROOM_RE = /^[A-Z0-9]{4}$/;
 const TTL = 300; // seconds
@@ -28,7 +49,7 @@ function validCandidate(cand) {
   return true;
 }
 
-async function touchTtl(key) {
+async function touchTtl(kv, key) {
   try { await kv.expire(key, TTL); } catch {}
 }
 
@@ -40,7 +61,19 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'GET') {
-    return res.status(200).json({ ok: true, service: 'tennis-signal' });
+    // Diagnostic: show which KV-related env var *names* are present (never
+    // values). Lets the user hit /api/signal in a browser to confirm whether
+    // the KV store is actually wired into this deployment.
+    return res.status(200).json({
+      ok: true,
+      service: 'tennis-signal',
+      env: {
+        KV_REST_API_URL:          !!process.env.KV_REST_API_URL,
+        KV_REST_API_TOKEN:        !!process.env.KV_REST_API_TOKEN,
+        UPSTASH_REDIS_REST_URL:   !!process.env.UPSTASH_REDIS_REST_URL,
+        UPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
+      }
+    });
   }
 
   if (req.method !== 'POST') {
@@ -48,6 +81,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    const kv = getKv();
     const body = req.body || {};
     const { op, room, payload } = body;
 
@@ -91,7 +125,7 @@ export default async function handler(req, res) {
         const exists = await kv.get(keyRoom(room));
         if (!exists) return res.status(404).json({ error: 'Room not found' });
         await kv.set(keyOffer(room), JSON.stringify(payload.sdp), { ex: TTL });
-        await touchTtl(keyRoom(room));
+        await touchTtl(kv, keyRoom(room));
         return res.status(200).json({ ok: true });
       }
 
@@ -99,8 +133,8 @@ export default async function handler(req, res) {
         const raw = await kv.get(keyOffer(room));
         if (raw == null) return res.status(404).json({ error: 'Room not found' });
         const sdp = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        await touchTtl(keyRoom(room));
-        await touchTtl(keyOffer(room));
+        await touchTtl(kv, keyRoom(room));
+        await touchTtl(kv, keyOffer(room));
         return res.status(200).json({ sdp });
       }
 
@@ -111,7 +145,7 @@ export default async function handler(req, res) {
         const exists = await kv.get(keyRoom(room));
         if (!exists) return res.status(404).json({ error: 'Room not found' });
         await kv.set(keyAnswer(room), JSON.stringify(payload.sdp), { ex: TTL });
-        await touchTtl(keyRoom(room));
+        await touchTtl(kv, keyRoom(room));
         return res.status(200).json({ ok: true });
       }
 
@@ -172,6 +206,10 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('POST /api/signal error:', err);
-    return res.status(500).json({ error: 'Signaling failed' });
+    // Surface the error message so missing-env-var failures from getKv()
+    // (and other unexpected errors) are visible client-side instead of a
+    // generic "Signaling failed".
+    const msg = err && err.message ? err.message : String(err);
+    return res.status(500).json({ error: 'Signaling failed: ' + msg });
   }
 }
