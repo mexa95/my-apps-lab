@@ -777,16 +777,33 @@
     }
 
     async function postSignal(op, room, payload, signal) {
-      const res = await fetch('/api/signal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op, room, payload }),
-        signal,
-      });
+      let res;
+      try {
+        res = await fetch('/api/signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op, room, payload }),
+          signal,
+        });
+      } catch (e) {
+        console.warn('[net] fetch failed:', op, e);
+        throw e;
+      }
       const text = await res.text();
       let data = null;
-      try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+      try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text.slice(0, 200) }; }
+      if (res.status >= 400) {
+        console.warn('[net] signal error:', op, 'status', res.status, data);
+      }
       return { status: res.status, data };
+    }
+
+    function describeSignalError(status, data, fallback) {
+      if (status === 404) return 'Server endpoint /api/signal not found — is the function deployed?';
+      if (status === 0)   return 'No response from server';
+      const serverMsg = data && (data.error || data.raw);
+      if (serverMsg) return `${fallback} (HTTP ${status}: ${serverMsg})`;
+      return `${fallback} (HTTP ${status})`;
     }
 
     function netFail(msg) {
@@ -918,15 +935,23 @@
       menuScreen = 'onlineHostWait';
       // Claim a room code (retry up to 3x on collision).
       let claimed = false;
+      let lastStatus = 0, lastData = null;
       for (let i = 0; i < 3 && !claimed; i++) {
         const code = randRoomCode();
         try {
-          const { status } = await postSignal('create', code, {});
+          const { status, data } = await postSignal('create', code, {});
+          lastStatus = status; lastData = data;
           if (status === 201) { net.room = code; claimed = true; }
-          else if (status !== 409) { netFail('Could not create room'); return; }
+          else if (status !== 409) {
+            netFail(describeSignalError(status, data, 'Could not create room'));
+            return;
+          }
         } catch { netFail('Could not reach server'); return; }
       }
-      if (!claimed) { netFail('Could not create room'); return; }
+      if (!claimed) {
+        netFail(describeSignalError(lastStatus, lastData, 'Could not create room'));
+        return;
+      }
 
       try {
         net.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -951,9 +976,10 @@
       try {
         const offer = await net.pc.createOffer();
         await net.pc.setLocalDescription(offer);
-        const { status } = await postSignal('offer', net.room, { sdp: { type: offer.type, sdp: offer.sdp } }, signal);
-        if (status !== 200) { netFail('Could not publish offer'); return; }
+        const { status, data } = await postSignal('offer', net.room, { sdp: { type: offer.type, sdp: offer.sdp } }, signal);
+        if (status !== 200) { netFail(describeSignalError(status, data, 'Could not publish offer')); return; }
       } catch (e) {
+        console.warn('[net] WebRTC setup failed (host):', e);
         netFail('WebRTC setup failed');
         return;
       }
@@ -975,7 +1001,10 @@
       try {
         const { status, data } = await postSignal('join', code, {});
         if (status === 404) { netFail('Room not found'); return; }
-        if (status !== 200 || !data.sdp) { netFail('Could not join room'); return; }
+        if (status !== 200 || !data.sdp) {
+          netFail(describeSignalError(status, data, 'Could not join room'));
+          return;
+        }
         offer = data.sdp;
       } catch { netFail('Could not reach server'); return; }
 
@@ -1003,9 +1032,10 @@
         await flushPendingIce();
         const answer = await net.pc.createAnswer();
         await net.pc.setLocalDescription(answer);
-        const { status } = await postSignal('answer', code, { sdp: { type: answer.type, sdp: answer.sdp } }, signal);
-        if (status !== 200) { netFail('Could not publish answer'); return; }
+        const { status, data } = await postSignal('answer', code, { sdp: { type: answer.type, sdp: answer.sdp } }, signal);
+        if (status !== 200) { netFail(describeSignalError(status, data, 'Could not publish answer')); return; }
       } catch (e) {
+        console.warn('[net] WebRTC setup failed (guest):', e);
         netFail('WebRTC setup failed');
         return;
       }

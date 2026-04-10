@@ -60,13 +60,27 @@ export default async function handler(req, res) {
 
     switch (op) {
       case 'create': {
-        // Atomic claim: fails if key already exists.
-        const ok = await kv.set(
-          keyRoom(room),
-          JSON.stringify({ status: 'waiting', createdAt: Date.now() }),
-          { nx: true, ex: TTL }
-        );
-        if (!ok) return res.status(409).json({ error: 'Room code already in use' });
+        // Atomic claim: fails if key already exists. @vercel/kv returns
+        // 'OK' on success and null when NX condition fails. Be tolerant of
+        // variations (some client versions return true/false or { result }).
+        let ok;
+        try {
+          ok = await kv.set(
+            keyRoom(room),
+            { status: 'waiting', createdAt: Date.now() },
+            { nx: true, ex: TTL }
+          );
+        } catch (e) {
+          console.error('POST /api/signal create: kv.set threw:', e);
+          return res.status(500).json({ error: 'KV write failed: ' + (e && e.message ? e.message : String(e)) });
+        }
+        console.log('POST /api/signal create', room, '-> kv.set returned:', ok);
+        const success = ok === 'OK' || ok === true || (ok && ok.result === 'OK');
+        const collision = ok === null || ok === false || ok === undefined;
+        if (success) return res.status(201).json({ ok: true });
+        if (collision) return res.status(409).json({ error: 'Room code already in use' });
+        // Unknown return shape — treat as success but log loudly.
+        console.warn('POST /api/signal create: unexpected kv.set return, treating as success:', ok);
         return res.status(201).json({ ok: true });
       }
 
