@@ -66,6 +66,11 @@
     let winScore = 5;
     let winner = null;
 
+    // Network state
+    let netMode = 'local'; // 'local' | 'host' | 'guest'
+    let menuScreen = 'main'; // main|onlineChoice|onlineHostWait|onlineJoinInput|onlineConnecting|onlineError
+    let joinCodeInput = '';
+
     // Input
     let mouseY = H / 2;
     function getCanvasPos(clientX, clientY) {
@@ -99,8 +104,31 @@
     }, { passive: false });
     canvas.addEventListener('click', e => handleTap(e.clientX, e.clientY));
     document.addEventListener('keydown', e => {
+      // Room-code entry on join screen
+      if (gameState === 'menu' && menuScreen === 'onlineJoinInput') {
+        if (e.key === 'Backspace') {
+          joinCodeInput = joinCodeInput.slice(0, -1);
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'Enter') {
+          if (joinCodeInput.length === 4) net.join(joinCodeInput);
+          return;
+        }
+        if (e.key === 'Escape') {
+          menuScreen = 'onlineChoice';
+          joinCodeInput = '';
+          return;
+        }
+        if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && joinCodeInput.length < 4) {
+          joinCodeInput += e.key.toUpperCase();
+          e.preventDefault();
+          return;
+        }
+        return;
+      }
       if (e.key === 'Enter' || e.key === ' ') {
-        if (gameState === 'menu') startGame();
+        if (gameState === 'menu' && menuScreen === 'main') startGame('local');
         else if (gameState === 'gameover') showMenu();
       }
     });
@@ -420,41 +448,43 @@
       }
     }
 
-    function drawMenu() {
+    function drawMenuBackground() {
       ctx.fillStyle = BG;
       ctx.fillRect(0, 0, W, H);
       // Faint table background
       ctx.fillStyle = 'rgba(25,110,55,0.12)';
       ctx.fillRect(40, 50, W - 80, H - 100);
+    }
 
-      menuButtons = [];
+    function drawMenuTitle(subtitle) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-
-      // Title
       ctx.font = 'bold 72px Impact, Arial Black, sans-serif';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('TABLE TENNIS', W / 2, 110);
-
+      ctx.fillText('TABLE TENNIS', W / 2, 90);
       ctx.font = '22px sans-serif';
       ctx.fillStyle = POWERUP_COLOR;
-      ctx.fillText('⚡ Power-Up Edition', W / 2, 155);
+      ctx.fillText(subtitle || '⚡ Power-Up Edition', W / 2, 130);
+    }
+
+    function drawMainMenu() {
+      drawMenuTitle();
 
       // Difficulty
       ctx.font = 'bold 13px sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillText('DIFFICULTY', W / 2, 218);
+      ctx.fillText('DIFFICULTY', W / 2, 180);
 
       const diffs = [
         { key: 'easy',   label: 'Easy',   color: '#00e5a0' },
         { key: 'medium', label: 'Medium', color: POWERUP_COLOR },
         { key: 'hard',   label: 'Hard',   color: '#dc3232' },
       ];
-      const bw = 160, bh = 52, gap = 20;
+      const bw = 160, bh = 48, gap = 20;
       const totalBW = diffs.length * bw + (diffs.length - 1) * gap;
       diffs.forEach((d, i) => {
         const x = W / 2 - totalBW / 2 + i * (bw + gap);
-        const y = 234;
+        const y = 196;
         const sel = difficulty === d.key;
         ctx.fillStyle = sel ? d.color : 'rgba(255,255,255,0.08)';
         roundRect(x, y, bw, bh, 8);
@@ -467,14 +497,14 @@
       // Score limit
       ctx.font = 'bold 13px sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillText('FIRST TO', W / 2, 336);
+      ctx.fillText('FIRST TO', W / 2, 280);
 
       const scores = [5, 7, 10];
-      const sbw = 120, sbh = 52, sgap = 24;
+      const sbw = 120, sbh = 48, sgap = 24;
       const totalSW = scores.length * sbw + (scores.length - 1) * sgap;
       scores.forEach((s, i) => {
         const x = W / 2 - totalSW / 2 + i * (sbw + sgap);
-        const y = 352;
+        const y = 296;
         const sel = winScore === s;
         ctx.fillStyle = sel ? '#3264dc' : 'rgba(255,255,255,0.08)';
         roundRect(x, y, sbw, sbh, 8);
@@ -484,9 +514,9 @@
         menuButtons.push({ x, y, w: sbw, h: sbh, action: () => { winScore = s; } });
       });
 
-      // Play button (pulsing)
-      const pw = 240, ph = 64;
-      const px = W / 2 - pw / 2, py = 458;
+      // Play vs AI button (pulsing)
+      const pw = 260, ph = 60;
+      const px = W / 2 - pw / 2, py = 388;
       const pulse = 1 + 0.04 * Math.sin(menuPulse * 3);
       ctx.save();
       ctx.translate(W / 2, py + ph / 2);
@@ -495,10 +525,218 @@
       ctx.fillStyle = '#00e5a0';
       roundRect(px, py, pw, ph, 12);
       ctx.fillStyle = '#000';
-      ctx.font = 'bold 26px Impact, Arial Black, sans-serif';
-      ctx.fillText('▶  PLAY', W / 2, py + ph / 2 + 1);
+      ctx.font = 'bold 24px Impact, Arial Black, sans-serif';
+      ctx.fillText('▶  PLAY vs AI', W / 2, py + ph / 2 + 1);
       ctx.restore();
-      menuButtons.push({ x: px - 12, y: py - 12, w: pw + 24, h: ph + 24, action: startGame });
+      menuButtons.push({ x: px - 12, y: py - 12, w: pw + 24, h: ph + 24, action: () => startGame('local') });
+
+      // Play Online button
+      const ow = 260, oh = 54;
+      const ox = W / 2 - ow / 2, oy = 472;
+      ctx.fillStyle = '#3264dc';
+      roundRect(ox, oy, ow, oh, 12);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 22px Impact, Arial Black, sans-serif';
+      ctx.fillText('🌐  PLAY ONLINE', W / 2, oy + oh / 2 + 1);
+      menuButtons.push({
+        x: ox, y: oy, w: ow, h: oh,
+        action: () => { menuScreen = 'onlineChoice'; }
+      });
+    }
+
+    function drawBackButton(label, action) {
+      const bw = 140, bh = 44;
+      const bx = 30, by = H - 60;
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      roundRect(bx, by, bw, bh, 8);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, bx + bw / 2, by + bh / 2);
+      menuButtons.push({ x: bx, y: by, w: bw, h: bh, action });
+    }
+
+    function drawOnlineChoice() {
+      drawMenuTitle('🌐 Online Multiplayer');
+
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('CHOOSE A ROLE', W / 2, 200);
+
+      const bw = 280, bh = 80, gap = 30;
+      const totalH = bh * 2 + gap;
+      const startY = H / 2 - totalH / 2 + 20;
+
+      // Host
+      const hx = W / 2 - bw / 2, hy = startY;
+      ctx.fillStyle = '#00e5a0';
+      roundRect(hx, hy, bw, bh, 12);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 28px Impact, Arial Black, sans-serif';
+      ctx.fillText('HOST GAME', W / 2, hy + bh / 2 - 8);
+      ctx.font = '14px sans-serif';
+      ctx.fillText('Create a room code to share', W / 2, hy + bh / 2 + 18);
+      menuButtons.push({ x: hx, y: hy, w: bw, h: bh, action: () => net.host() });
+
+      // Join
+      const jx = W / 2 - bw / 2, jy = startY + bh + gap;
+      ctx.fillStyle = '#3264dc';
+      roundRect(jx, jy, bw, bh, 12);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 28px Impact, Arial Black, sans-serif';
+      ctx.fillText('JOIN GAME', W / 2, jy + bh / 2 - 8);
+      ctx.font = '14px sans-serif';
+      ctx.fillText('Enter an opponent\u2019s room code', W / 2, jy + bh / 2 + 18);
+      menuButtons.push({
+        x: jx, y: jy, w: bw, h: bh,
+        action: () => { menuScreen = 'onlineJoinInput'; joinCodeInput = ''; }
+      });
+
+      drawBackButton('\u2190 BACK', () => { menuScreen = 'main'; });
+    }
+
+    function drawOnlineHostWait() {
+      drawMenuTitle('🌐 Waiting for opponent\u2026');
+
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.textAlign = 'center';
+      ctx.fillText('SHARE THIS ROOM CODE', W / 2, 220);
+
+      // Code display
+      const code = net.room || '----';
+      ctx.font = 'bold 120px Impact, Arial Black, sans-serif';
+      const glow = 0.5 + 0.5 * Math.abs(Math.sin(menuPulse * 2));
+      ctx.shadowColor = '#00e5a0';
+      ctx.shadowBlur = 30 * glow;
+      ctx.fillStyle = '#00e5a0';
+      ctx.fillText(code, W / 2, 320);
+      ctx.shadowBlur = 0;
+
+      // Dots spinner
+      const dots = '.'.repeat(1 + Math.floor(menuPulse * 2) % 4);
+      ctx.font = '22px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillText('Waiting for opponent' + dots, W / 2, 430);
+
+      drawBackButton('CANCEL', () => { netTeardown(); menuScreen = 'onlineChoice'; });
+    }
+
+    function drawOnlineJoinInput() {
+      drawMenuTitle('🌐 Join a game');
+
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.textAlign = 'center';
+      ctx.fillText('ENTER ROOM CODE', W / 2, 220);
+
+      // Four character boxes
+      const boxW = 80, boxH = 100, gap = 18;
+      const totalW = 4 * boxW + 3 * gap;
+      const startX = W / 2 - totalW / 2;
+      const boxY = 250;
+      const cursorOn = Math.floor(menuPulse * 2) % 2 === 0;
+      for (let i = 0; i < 4; i++) {
+        const x = startX + i * (boxW + gap);
+        const isCursor = i === joinCodeInput.length;
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        roundRect(x, boxY, boxW, boxH, 10);
+        if (isCursor && cursorOn) {
+          ctx.strokeStyle = '#00e5a0';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x + 1.5, boxY + 1.5, boxW - 3, boxH - 3);
+        }
+        if (i < joinCodeInput.length) {
+          ctx.font = 'bold 70px Impact, Arial Black, sans-serif';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(joinCodeInput[i], x + boxW / 2, boxY + boxH / 2 + 4);
+        }
+      }
+
+      ctx.font = '14px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillText('Type the 4-character code from the host', W / 2, 380);
+
+      // Join button
+      const jw = 220, jh = 56;
+      const jx = W / 2 - jw / 2, jy = 410;
+      const ready = joinCodeInput.length === 4;
+      ctx.fillStyle = ready ? '#00e5a0' : 'rgba(255,255,255,0.08)';
+      roundRect(jx, jy, jw, jh, 12);
+      ctx.fillStyle = ready ? '#000' : 'rgba(255,255,255,0.3)';
+      ctx.font = 'bold 24px Impact, Arial Black, sans-serif';
+      ctx.fillText('JOIN', jx + jw / 2, jy + jh / 2 + 1);
+      menuButtons.push({
+        x: jx, y: jy, w: jw, h: jh,
+        action: () => { if (ready) net.join(joinCodeInput); }
+      });
+
+      drawBackButton('\u2190 BACK', () => { menuScreen = 'onlineChoice'; joinCodeInput = ''; });
+    }
+
+    function drawOnlineConnecting() {
+      drawMenuTitle('🌐 Connecting\u2026');
+
+      const dots = '.'.repeat(1 + Math.floor(menuPulse * 2) % 4);
+      ctx.font = 'bold 36px Impact, Arial Black, sans-serif';
+      ctx.fillStyle = '#3264dc';
+      ctx.fillText('Establishing connection' + dots, W / 2, H / 2);
+
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillText('Negotiating peer connection', W / 2, H / 2 + 50);
+
+      drawBackButton('CANCEL', () => { netTeardown(); menuScreen = 'onlineChoice'; });
+    }
+
+    function drawOnlineError() {
+      drawMenuTitle('🌐 Connection Error');
+
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillStyle = '#ff4444';
+      ctx.fillText(net.errorMsg || 'Connection failed', W / 2, H / 2 - 20);
+
+      // Try again
+      const bw = 200, bh = 52, gap = 20;
+      const totalW = bw * 2 + gap;
+      const sx = W / 2 - totalW / 2;
+      const by = H / 2 + 60;
+
+      ctx.fillStyle = '#00e5a0';
+      roundRect(sx, by, bw, bh, 10);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 20px Impact, Arial Black, sans-serif';
+      ctx.fillText('TRY AGAIN', sx + bw / 2, by + bh / 2 + 1);
+      menuButtons.push({
+        x: sx, y: by, w: bw, h: bh,
+        action: () => { net.errorMsg = null; menuScreen = 'onlineChoice'; }
+      });
+
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      roundRect(sx + bw + gap, by, bw, bh, 10);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText('MAIN MENU', sx + bw + gap + bw / 2, by + bh / 2 + 1);
+      menuButtons.push({
+        x: sx + bw + gap, y: by, w: bw, h: bh,
+        action: () => { net.errorMsg = null; menuScreen = 'main'; }
+      });
+    }
+
+    function drawMenu() {
+      drawMenuBackground();
+      menuButtons = [];
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      switch (menuScreen) {
+        case 'onlineChoice':    drawOnlineChoice(); break;
+        case 'onlineHostWait':  drawOnlineHostWait(); break;
+        case 'onlineJoinInput': drawOnlineJoinInput(); break;
+        case 'onlineConnecting':drawOnlineConnecting(); break;
+        case 'onlineError':     drawOnlineError(); break;
+        default:                drawMainMenu(); break;
+      }
     }
 
     function menuLoop() {
@@ -508,75 +746,466 @@
       requestAnimationFrame(menuLoop);
     }
 
+    // --- Networking (WebRTC DataChannel P2P, signaling via /api/signal) ---
+    const net = {
+      role: null,            // 'host' | 'guest' | null
+      pc: null,              // RTCPeerConnection
+      dc: null,              // RTCDataChannel (ordered:false, maxRetransmits:0)
+      room: null,
+      state: 'idle',         // idle|creating|waiting|joining|connecting|connected|failed|closed
+      errorMsg: null,
+      latestSnapshot: null,  // last host->guest snapshot
+      lastAppliedFrame: -1,
+      remotePaddleY: H / 2,  // host: guest's reported paddle centerY
+      lastRx: 0,             // timestamp of last received message
+      iceAbort: null,        // AbortController for KV pollers
+      sendTick: 0,
+      pendingEvents: [],     // host: queued hit events to send with next snapshot
+      remoteDescSet: false,  // whether setRemoteDescription has completed
+      pendingIce: [],        // ICE candidates queued until remoteDescription is set
+      connectDeadline: 0,    // timeout for connection establishment
+      queryParamsShown: false,
+    };
+
+    const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+    function randRoomCode() {
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+      let s = '';
+      for (let i = 0; i < 4; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+      return s;
+    }
+
+    async function postSignal(op, room, payload, signal) {
+      const res = await fetch('/api/signal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op, room, payload }),
+        signal,
+      });
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+      return { status: res.status, data };
+    }
+
+    function netFail(msg) {
+      console.warn('[net] fail:', msg);
+      net.errorMsg = msg;
+      net.state = 'failed';
+      menuScreen = 'onlineError';
+      netTeardown(false);
+      if (gameState === 'playing') {
+        winner = 'disconnect';
+        gameState = 'gameover';
+        canvas.style.cursor = 'default';
+      }
+    }
+
+    function netTeardown(notifyServer = true) {
+      try { if (net.iceAbort) net.iceAbort.abort(); } catch {}
+      try { if (net.dc) { net.dc.onopen = net.dc.onmessage = net.dc.onclose = null; net.dc.close(); } } catch {}
+      try {
+        if (net.pc) {
+          net.pc.onicecandidate = null;
+          net.pc.ondatachannel = null;
+          net.pc.oniceconnectionstatechange = null;
+          net.pc.close();
+        }
+      } catch {}
+      if (notifyServer && net.room) {
+        // fire-and-forget
+        try { postSignal('close', net.room, {}).catch(() => {}); } catch {}
+      }
+      net.pc = null;
+      net.dc = null;
+      net.iceAbort = null;
+      net.room = null;
+      net.role = null;
+      net.state = 'idle';
+      net.latestSnapshot = null;
+      net.lastAppliedFrame = -1;
+      net.remotePaddleY = H / 2;
+      net.lastRx = 0;
+      net.sendTick = 0;
+      net.pendingEvents.length = 0;
+      net.remoteDescSet = false;
+      net.pendingIce.length = 0;
+      net.connectDeadline = 0;
+    }
+
+    async function flushPendingIce() {
+      if (!net.remoteDescSet || !net.pc) return;
+      while (net.pendingIce.length) {
+        const c = net.pendingIce.shift();
+        try { await net.pc.addIceCandidate(c); }
+        catch (e) { console.warn('[net] addIceCandidate failed:', e); }
+      }
+    }
+
+    async function pollAnswerLoop(signal) {
+      while (!signal.aborted && net.pc && !net.remoteDescSet) {
+        try {
+          const { status, data } = await postSignal('pollAnswer', net.room, {}, signal);
+          if (signal.aborted) return;
+          if (status === 200 && data.sdp) {
+            await net.pc.setRemoteDescription(data.sdp);
+            net.remoteDescSet = true;
+            await flushPendingIce();
+            return;
+          }
+        } catch (e) {
+          if (signal.aborted) return;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    async function pollIceLoop(remoteRole, signal) {
+      while (!signal.aborted && net.pc) {
+        try {
+          const { status, data } = await postSignal('pollIce', net.room, { role: remoteRole }, signal);
+          if (signal.aborted) return;
+          if (status === 200 && Array.isArray(data.candidates)) {
+            for (const c of data.candidates) {
+              if (!net.remoteDescSet) {
+                net.pendingIce.push(c);
+              } else {
+                try { await net.pc.addIceCandidate(c); }
+                catch (e) { console.warn('[net] addIceCandidate failed:', e); }
+              }
+            }
+          }
+        } catch (e) {
+          if (signal.aborted) return;
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+
+    function wireDataChannel(dc) {
+      net.dc = dc;
+      dc.onopen = () => {
+        net.state = 'connected';
+        net.lastRx = Date.now();
+        // Keep ICE poller alive briefly for late candidates, then abort.
+        setTimeout(() => { try { if (net.iceAbort) net.iceAbort.abort(); } catch {} }, 5000);
+        // Host and guest both enter playing state here.
+        startGame(net.role);
+      };
+      dc.onmessage = ev => handleNetMessage(ev.data);
+      dc.onclose = () => {
+        if (net.state === 'connected' || net.state === 'connecting') {
+          netFail('Opponent disconnected');
+        }
+      };
+    }
+
+    function startConnectTimeout() {
+      net.connectDeadline = Date.now() + 60000;
+      const check = () => {
+        if (net.state === 'connected' || net.state === 'closed' || net.state === 'failed') return;
+        if (Date.now() >= net.connectDeadline) { netFail('Connection timed out'); return; }
+        setTimeout(check, 1000);
+      };
+      setTimeout(check, 1000);
+    }
+
+    async function netHost() {
+      netTeardown(false);
+      net.role = 'host';
+      net.state = 'creating';
+      menuScreen = 'onlineHostWait';
+      // Claim a room code (retry up to 3x on collision).
+      let claimed = false;
+      for (let i = 0; i < 3 && !claimed; i++) {
+        const code = randRoomCode();
+        try {
+          const { status } = await postSignal('create', code, {});
+          if (status === 201) { net.room = code; claimed = true; }
+          else if (status !== 409) { netFail('Could not create room'); return; }
+        } catch { netFail('Could not reach server'); return; }
+      }
+      if (!claimed) { netFail('Could not create room'); return; }
+
+      try {
+        net.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      } catch { netFail('WebRTC not supported'); return; }
+
+      const dc = net.pc.createDataChannel('game', { ordered: false, maxRetransmits: 0 });
+      wireDataChannel(dc);
+
+      net.iceAbort = new AbortController();
+      const signal = net.iceAbort.signal;
+
+      net.pc.onicecandidate = e => {
+        if (!e.candidate) return;
+        postSignal('ice', net.room, { role: 'host', candidate: e.candidate.toJSON() }, signal).catch(() => {});
+      };
+      net.pc.oniceconnectionstatechange = () => {
+        if (!net.pc) return;
+        const s = net.pc.iceConnectionState;
+        if (s === 'failed') netFail('Connection failed (NAT). Try a different network.');
+      };
+
+      try {
+        const offer = await net.pc.createOffer();
+        await net.pc.setLocalDescription(offer);
+        const { status } = await postSignal('offer', net.room, { sdp: { type: offer.type, sdp: offer.sdp } }, signal);
+        if (status !== 200) { netFail('Could not publish offer'); return; }
+      } catch (e) {
+        netFail('WebRTC setup failed');
+        return;
+      }
+
+      net.state = 'waiting';
+      startConnectTimeout();
+      pollAnswerLoop(signal);
+      pollIceLoop('guest', signal);
+    }
+
+    async function netJoin(code) {
+      netTeardown(false);
+      net.role = 'guest';
+      net.room = code;
+      net.state = 'joining';
+      menuScreen = 'onlineConnecting';
+
+      let offer;
+      try {
+        const { status, data } = await postSignal('join', code, {});
+        if (status === 404) { netFail('Room not found'); return; }
+        if (status !== 200 || !data.sdp) { netFail('Could not join room'); return; }
+        offer = data.sdp;
+      } catch { netFail('Could not reach server'); return; }
+
+      try {
+        net.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      } catch { netFail('WebRTC not supported'); return; }
+
+      net.iceAbort = new AbortController();
+      const signal = net.iceAbort.signal;
+
+      net.pc.ondatachannel = e => wireDataChannel(e.channel);
+      net.pc.onicecandidate = e => {
+        if (!e.candidate) return;
+        postSignal('ice', net.room, { role: 'guest', candidate: e.candidate.toJSON() }, signal).catch(() => {});
+      };
+      net.pc.oniceconnectionstatechange = () => {
+        if (!net.pc) return;
+        const s = net.pc.iceConnectionState;
+        if (s === 'failed') netFail('Connection failed (NAT). Try a different network.');
+      };
+
+      try {
+        await net.pc.setRemoteDescription(offer);
+        net.remoteDescSet = true;
+        await flushPendingIce();
+        const answer = await net.pc.createAnswer();
+        await net.pc.setLocalDescription(answer);
+        const { status } = await postSignal('answer', code, { sdp: { type: answer.type, sdp: answer.sdp } }, signal);
+        if (status !== 200) { netFail('Could not publish answer'); return; }
+      } catch (e) {
+        netFail('WebRTC setup failed');
+        return;
+      }
+
+      net.state = 'connecting';
+      startConnectTimeout();
+      pollIceLoop('host', signal);
+    }
+
+    function netSafeSend(obj) {
+      if (!net.dc || net.dc.readyState !== 'open') return;
+      try { net.dc.send(JSON.stringify(obj)); } catch {}
+    }
+
+    function netSendSnapshot() {
+      const snap = {
+        t: 's',
+        f: net.sendTick,
+        ts: Date.now(),
+        b: [ball.x, ball.y, ball.vx, ball.vy, ball.spin],
+        u: [user.y, user.h],
+        a: [ai.y, ai.h],
+        pu: powerup.active ? [powerup.x, powerup.y] : null,
+        s: [scoreUser, scoreAI],
+        st: gameState,
+      };
+      netSafeSend(snap);
+      // Flush any pending hit events captured during this physics tick.
+      for (const ev of net.pendingEvents) netSafeSend(ev);
+      net.pendingEvents.length = 0;
+    }
+
+    function netSendInput() {
+      netSafeSend({ t: 'i', y: user.centerY, ts: Date.now() });
+    }
+
+    function handleNetMessage(raw) {
+      net.lastRx = Date.now();
+      let msg;
+      try { msg = JSON.parse(raw); } catch { return; }
+      if (!msg || typeof msg !== 'object') return;
+      if (netMode === 'guest') {
+        if (msg.t === 's') {
+          if (typeof msg.f === 'number' && msg.f <= net.lastAppliedFrame) return;
+          net.latestSnapshot = msg;
+          if (typeof msg.f === 'number') net.lastAppliedFrame = msg.f;
+        } else if (msg.t === 'h') {
+          // Hit event: spawn particles locally for juice.
+          const color = msg.who === 'user' ? user.color : ai.color;
+          spawnParticles(msg.x, msg.y, msg.kind === 'powerup' ? POWERUP_COLOR : color);
+        }
+      } else if (netMode === 'host') {
+        if (msg.t === 'i' && typeof msg.y === 'number') {
+          net.remotePaddleY = msg.y;
+        }
+      }
+    }
+
+    function applySnapshotToEntities() {
+      const s = net.latestSnapshot;
+      if (!s) return;
+      if (Array.isArray(s.b) && s.b.length >= 5) {
+        ball.x = s.b[0]; ball.y = s.b[1];
+        ball.vx = s.b[2]; ball.vy = s.b[3]; ball.spin = s.b[4];
+        ball.trail.push({ x: ball.x, y: ball.y });
+        if (ball.trail.length > 10) ball.trail.shift();
+      }
+      if (Array.isArray(s.u) && s.u.length >= 2) { user.y = s.u[0]; user.h = s.u[1]; }
+      if (Array.isArray(s.a) && s.a.length >= 2) { ai.y = s.a[0];   ai.h = s.a[1]; }
+      if (s.pu) { powerup.active = true; powerup.x = s.pu[0]; powerup.y = s.pu[1]; powerup.pulse += 0.1; }
+      else { powerup.active = false; }
+      if (Array.isArray(s.s) && s.s.length >= 2) { scoreUser = s.s[0]; scoreAI = s.s[1]; }
+      if (s.st === 'gameover' && gameState === 'playing') {
+        gameState = 'gameover';
+        winner = scoreUser >= winScore ? 'user' : (scoreAI >= winScore ? 'ai' : winner);
+        canvas.style.cursor = 'default';
+      }
+    }
+
+    // Convenience aliases used by other parts of the file
+    net.host = netHost;
+    net.join = netJoin;
+    net.teardown = netTeardown;
+
     // --- Game Loop ---
     function gameLoop() {
-      if (gameState !== 'playing') return;
+      // Allow 'gameover' through so async disconnect triggers (dc.onclose) still render the overlay.
+      if (gameState === 'menu') return;
 
-      const aiSpeed    = { easy: 3.5, medium: 6,   hard: 9.5 }[difficulty];
-      const aiDeadzone = { easy: 35,  medium: 15,  hard: 4   }[difficulty];
-      const aiError    = { easy: 70,  medium: 0,   hard: 0   }[difficulty];
+      // Apply remote state on guest before anything else so paddle/ball render correctly.
+      if (netMode === 'guest' && net.latestSnapshot) applySnapshotToEntities();
 
-      // User control
-      user.centerY = mouseY;
-      user.clamp();
-      user.updateVelocity();
-
-      // AI
-      ai.updateVelocity();
-      const aiTarget = ball.y + (aiError ? (Math.random() - 0.5) * aiError : 0);
-      if (ball.vx > 0) {
-        if (ai.centerY < aiTarget - aiDeadzone) ai.y += Math.min(aiSpeed, aiTarget - ai.centerY);
-        else if (ai.centerY > aiTarget + aiDeadzone) ai.y -= Math.min(aiSpeed, ai.centerY - aiTarget);
-      } else {
-        if (ai.centerY < H / 2) ai.y += 2;
-        else if (ai.centerY > H / 2) ai.y -= 2;
-      }
-      ai.clamp();
-
-      ball.update();
-      powerup.update();
-      particles.forEach(p => p.update());
-      particles = particles.filter(p => p.life > 0 && p.radius > 0);
-
-      // Ball-Paddle collisions
-      if (rectCollide(ball.x, ball.y, ball.radius, user.x, user.y, user.w, user.h) && ball.vx < 0) {
-        ball.vx *= -1.05;
-        ball.vy += ((ball.y - user.centerY) / (user.h / 2)) * 6;
-        ball.spin = user.vy * 0.4;
-        ball.x = user.x + user.w + ball.radius;
-        ball.lastHit = 'user';
-        spawnParticles(ball.x, ball.y, user.color);
-      }
-      if (rectCollide(ball.x, ball.y, ball.radius, ai.x, ai.y, ai.w, ai.h) && ball.vx > 0) {
-        ball.vx *= -1.05;
-        ball.vy += ((ball.y - ai.centerY) / (ai.h / 2)) * 6;
-        ball.spin = ai.vy * 0.4;
-        ball.x = ai.x - ball.radius;
-        ball.lastHit = 'ai';
-        spawnParticles(ball.x, ball.y, ai.color);
+      // Host watchdog: detect stale opponent (3s without any packet).
+      if (netMode === 'host' && net.lastRx && Date.now() - net.lastRx > 3000) {
+        netFail('Opponent disconnected');
+        // Fall through to render one final frame with the gameover overlay.
       }
 
-      // PowerUp collision
-      if (powerup.active) {
-        const dist = Math.sqrt((ball.x - powerup.x) ** 2 + (ball.y - powerup.y) ** 2);
-        if (dist < ball.radius + powerup.radius) {
-          powerup.active = false;
-          spawnParticles(powerup.x, powerup.y, POWERUP_COLOR);
-          if (ball.lastHit === 'user') user.activatePowerup();
-          else if (ball.lastHit === 'ai') ai.activatePowerup();
+      // --- Input & opponent paddle per mode ---
+      if (netMode === 'local') {
+        const aiSpeed    = { easy: 3.5, medium: 6,   hard: 9.5 }[difficulty];
+        const aiDeadzone = { easy: 35,  medium: 15,  hard: 4   }[difficulty];
+        const aiError    = { easy: 70,  medium: 0,   hard: 0   }[difficulty];
+
+        user.centerY = mouseY;
+        user.clamp();
+        user.updateVelocity();
+
+        ai.updateVelocity();
+        const aiTarget = ball.y + (aiError ? (Math.random() - 0.5) * aiError : 0);
+        if (ball.vx > 0) {
+          if (ai.centerY < aiTarget - aiDeadzone) ai.y += Math.min(aiSpeed, aiTarget - ai.centerY);
+          else if (ai.centerY > aiTarget + aiDeadzone) ai.y -= Math.min(aiSpeed, ai.centerY - aiTarget);
+        } else {
+          if (ai.centerY < H / 2) ai.y += 2;
+          else if (ai.centerY > H / 2) ai.y -= 2;
+        }
+        ai.clamp();
+      } else if (netMode === 'host') {
+        user.centerY = mouseY;
+        user.clamp();
+        user.updateVelocity();
+
+        // Smooth opponent (guest) paddle toward reported centerY to absorb jitter.
+        const targetTopY = net.remotePaddleY - ai.h / 2;
+        ai.y += (targetTopY - ai.y) * 0.5;
+        ai.clamp();
+        ai.updateVelocity();
+      } else if (netMode === 'guest') {
+        // Client-side prediction of own paddle; host-authoritative physics decides hits.
+        user.centerY = mouseY;
+        user.clamp();
+        user.updateVelocity();
+        // ai paddle already set by applySnapshotToEntities; compute vy for render consistency.
+        ai.updateVelocity();
+      }
+
+      // --- Physics / collisions / scoring (skipped on guest; guarded by winner==null) ---
+      if (netMode !== 'guest' && winner == null) {
+        ball.update();
+        powerup.update();
+
+        // Ball-Paddle collisions
+        if (rectCollide(ball.x, ball.y, ball.radius, user.x, user.y, user.w, user.h) && ball.vx < 0) {
+          ball.vx *= -1.05;
+          ball.vy += ((ball.y - user.centerY) / (user.h / 2)) * 6;
+          ball.spin = user.vy * 0.4;
+          ball.x = user.x + user.w + ball.radius;
+          ball.lastHit = 'user';
+          spawnParticles(ball.x, ball.y, user.color);
+          if (netMode === 'host') net.pendingEvents.push({ t: 'h', kind: 'paddle', x: ball.x, y: ball.y, who: 'user' });
+        }
+        if (rectCollide(ball.x, ball.y, ball.radius, ai.x, ai.y, ai.w, ai.h) && ball.vx > 0) {
+          ball.vx *= -1.05;
+          ball.vy += ((ball.y - ai.centerY) / (ai.h / 2)) * 6;
+          ball.spin = ai.vy * 0.4;
+          ball.x = ai.x - ball.radius;
+          ball.lastHit = 'ai';
+          spawnParticles(ball.x, ball.y, ai.color);
+          if (netMode === 'host') net.pendingEvents.push({ t: 'h', kind: 'paddle', x: ball.x, y: ball.y, who: 'ai' });
+        }
+
+        // PowerUp collision
+        if (powerup.active) {
+          const dist = Math.sqrt((ball.x - powerup.x) ** 2 + (ball.y - powerup.y) ** 2);
+          if (dist < ball.radius + powerup.radius) {
+            powerup.active = false;
+            spawnParticles(powerup.x, powerup.y, POWERUP_COLOR);
+            if (ball.lastHit === 'user') user.activatePowerup();
+            else if (ball.lastHit === 'ai') ai.activatePowerup();
+            if (netMode === 'host') net.pendingEvents.push({ t: 'h', kind: 'powerup', x: powerup.x, y: powerup.y, who: ball.lastHit || 'user' });
+          }
+        }
+
+        // Scoring
+        if (ball.x < 0) {
+          scoreAI++;
+          if (scoreAI >= winScore) { gameState = 'gameover'; winner = 'ai'; canvas.style.cursor = 'default'; }
+          else ball.reset();
+        }
+        if (ball.x > W) {
+          scoreUser++;
+          if (scoreUser >= winScore) { gameState = 'gameover'; winner = 'user'; canvas.style.cursor = 'default'; }
+          else ball.reset();
         }
       }
 
-      // Scoring
-      if (ball.x < 0) {
-        scoreAI++;
-        if (scoreAI >= winScore) { gameState = 'gameover'; winner = 'ai'; canvas.style.cursor = 'default'; }
-        else ball.reset();
-      }
-      if (ball.x > W) {
-        scoreUser++;
-        if (scoreUser >= winScore) { gameState = 'gameover'; winner = 'user'; canvas.style.cursor = 'default'; }
-        else ball.reset();
+      // Particles run for all modes so hit-event juice appears on guest too.
+      particles.forEach(p => p.update());
+      particles = particles.filter(p => p.life > 0 && p.radius > 0);
+
+      // --- Network send ---
+      if (netMode === 'host' && gameState === 'playing') {
+        net.sendTick++;
+        if (net.sendTick % 2 === 0) netSendSnapshot();
+      } else if (netMode === 'host' && gameState === 'gameover') {
+        // Send one final snapshot so guest sees gameover state.
+        netSendSnapshot();
+      } else if (netMode === 'guest' && gameState === 'playing') {
+        netSendInput();
       }
 
       // --- Drawing ---
@@ -666,15 +1295,17 @@
       ctx.fillText(`${scoreUser}     ${scoreAI}`, W / 2, 8);
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
-      // Player labels
+      // Player labels (mode-aware)
       ctx.font = 'bold 12px sans-serif';
       ctx.letterSpacing = '2px';
+      const leftLabel  = netMode === 'guest' ? 'OPP' : 'YOU';
+      const rightLabel = netMode === 'local' ? 'AI'  : (netMode === 'guest' ? 'YOU' : 'OPP');
       ctx.fillStyle = 'rgba(220,50,50,0.4)';
       ctx.textAlign = 'left';
-      ctx.fillText('YOU', 52, 34);
+      ctx.fillText(leftLabel, 52, 34);
       ctx.fillStyle = 'rgba(50,100,220,0.4)';
       ctx.textAlign = 'right';
-      ctx.fillText('AI', W - 52, 34);
+      ctx.fillText(rightLabel, W - 52, 34);
       ctx.textAlign = 'center';
       ctx.restore();
 
@@ -688,23 +1319,35 @@
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(0, 0, W, H);
 
-        const isWin = winner === 'user';
+        const isDisconnect = winner === 'disconnect';
+        // Perspective-aware win check: guest's "user" paddle is on the right (scoreAI).
+        const isWin = !isDisconnect && (
+          (winner === 'user' && (netMode === 'local' || netMode === 'host')) ||
+          (winner === 'ai'   && netMode === 'guest')
+        );
+
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
         // Title with glow
-        const winColor = isWin ? '#00e5a0' : '#ff4444';
-        ctx.shadowColor = winColor;
+        let titleText, titleColor;
+        if (isDisconnect) { titleText = 'OPPONENT LEFT'; titleColor = '#ffb432'; }
+        else if (isWin)   { titleText = 'YOU WIN!';      titleColor = '#00e5a0'; }
+        else              { titleText = 'YOU LOSE';      titleColor = '#ff4444'; }
+
+        ctx.shadowColor = titleColor;
         ctx.shadowBlur = 30;
         ctx.font = 'bold 80px Impact, Arial Black, sans-serif';
-        ctx.fillStyle = winColor;
-        ctx.fillText(isWin ? 'YOU WIN!' : 'YOU LOSE', W / 2, H / 2 - 60);
+        ctx.fillStyle = titleColor;
+        ctx.fillText(titleText, W / 2, H / 2 - 60);
         ctx.shadowBlur = 0;
 
-        ctx.font = '36px Impact, Arial Black, sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 + 10);
+        if (!isDisconnect) {
+          ctx.font = '36px Impact, Arial Black, sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 + 10);
+        }
 
         ctx.font = '17px sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
@@ -717,22 +1360,39 @@
     }
 
     // --- State transitions ---
-    function startGame() {
+    function startGame(mode) {
+      netMode = mode || 'local';
       gameState = 'playing';
       canvas.style.cursor = 'none';
       scoreUser = 0; scoreAI = 0;
       winner = null;
-      ball.reset();
       particles = [];
       powerup.reset();
       user.h = user.baseHeight; user.powerTimer = 0; user.y = H / 2 - 50;
       ai.h = ai.baseHeight;   ai.powerTimer = 0;   ai.y = H / 2 - 50;
       mouseY = H / 2;
+      // Guest waits for the first host snapshot to populate ball state.
+      if (netMode === 'guest') {
+        ball.vx = 0; ball.vy = 0; ball.spin = 0;
+        ball.x = W / 2; ball.y = H / 2;
+        ball.trail = []; ball.lastHit = null;
+        net.lastAppliedFrame = -1;
+      } else {
+        ball.reset();
+      }
+      // Host primes lastRx so the stale watchdog grace-periods the first handshake.
+      if (netMode === 'host') net.lastRx = Date.now();
       requestAnimationFrame(gameLoop);
     }
 
     function showMenu() {
+      // Clean up any half-open connection when returning to menu.
+      netTeardown();
+      netMode = 'local';
+      menuScreen = 'main';
+      joinCodeInput = '';
       gameState = 'menu';
+      winner = null;
       canvas.style.cursor = 'default';
       requestAnimationFrame(menuLoop);
     }
