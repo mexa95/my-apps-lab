@@ -861,7 +861,7 @@
       room: null,
       state: 'idle',         // idle|creating|waiting|joining|connecting|connected|failed|closed
       errorMsg: null,
-      latestSnapshot: null,  // last host->guest snapshot
+      predAnchor: false,     // guest: has first snapshot been absorbed?
       lastAppliedFrame: -1,
       remotePaddleY: H / 2,  // host: guest's reported paddle centerY
       lastRx: 0,             // timestamp of last received message
@@ -966,7 +966,7 @@
       net.room = null;
       net.role = null;
       net.state = 'idle';
-      net.latestSnapshot = null;
+      net.predAnchor = false;
       net.lastAppliedFrame = -1;
       net.remotePaddleY = H / 2;
       net.lastRx = 0;
@@ -1185,7 +1185,6 @@
       const snap = {
         t: 's',
         f: net.sendTick,
-        ts: Date.now(),
         b: [ball.x, ball.y, ball.vx, ball.vy, ball.spin],
         u: [user.y, user.h],
         a: [ai.y, ai.h],
@@ -1201,7 +1200,7 @@
 
     function netSendInput() {
       // Guest sends the RIGHT paddle's centerY (guest controls ai entity).
-      netSafeSend({ t: 'i', y: ai.centerY, ts: Date.now() });
+      netSafeSend({ t: 'i', y: ai.centerY });
     }
 
     function handleNetMessage(raw) {
@@ -1228,8 +1227,9 @@
       if (netMode === 'guest') {
         if (msg.t === 's') {
           if (typeof msg.f === 'number' && msg.f <= net.lastAppliedFrame) return;
-          net.latestSnapshot = msg;
           if (typeof msg.f === 'number') net.lastAppliedFrame = msg.f;
+          // Apply immediately so guest prediction has a fresh anchor.
+          applySnapshot(msg);
         } else if (msg.t === 'h') {
           // Hit event: spawn particles locally for juice.
           const color = msg.who === 'user' ? user.color : ai.color;
@@ -1242,14 +1242,31 @@
       }
     }
 
-    function applySnapshotToEntities() {
-      const s = net.latestSnapshot;
+    // Guest-side snapshot apply. Called once per fresh snapshot from
+    // handleNetMessage (not every frame) so local prediction can advance
+    // freely between packets.
+    //
+    // Ball position uses a soft lerp (30%) to absorb 1–2 frames of
+    // prediction drift without a visible snap; velocity/spin/paddle/score
+    // are authoritative (hard overwrite) because they encode collisions.
+    // A hard-snap fallback kicks in on big drifts (>50px) and on the very
+    // first snapshot (lastAppliedFrame was still -1 on arrival).
+    function applySnapshot(s) {
       if (!s) return;
       if (Array.isArray(s.b) && s.b.length >= 5) {
-        ball.x = s.b[0]; ball.y = s.b[1];
+        const firstOrHuge = net.predAnchor === false ||
+          Math.abs(s.b[0] - ball.x) > 50 || Math.abs(s.b[1] - ball.y) > 50;
+        if (firstOrHuge) {
+          ball.x = s.b[0]; ball.y = s.b[1];
+        } else {
+          // 0.5 lerp ⇒ ~97% drift eliminated in 5 snapshots at 60Hz (~83ms).
+          ball.x += (s.b[0] - ball.x) * 0.5;
+          ball.y += (s.b[1] - ball.y) * 0.5;
+        }
         ball.vx = s.b[2]; ball.vy = s.b[3]; ball.spin = s.b[4];
         ball.trail.push({ x: ball.x, y: ball.y });
         if (ball.trail.length > 10) ball.trail.shift();
+        net.predAnchor = true;
       }
       if (Array.isArray(s.u) && s.u.length >= 2) { user.y = s.u[0]; user.h = s.u[1]; }
       if (Array.isArray(s.a) && s.a.length >= 2) { ai.y = s.a[0];   ai.h = s.a[1]; }
@@ -1261,8 +1278,6 @@
         winner = scoreUser >= winScore ? 'user' : (scoreAI >= winScore ? 'ai' : winner);
         canvas.style.cursor = 'default';
       }
-      // Host-authoritative rematch: if host transitions back to playing,
-      // follow them and clear any leftover rematch UI affordance.
       if (s.st === 'playing' && gameState === 'gameover') {
         gameState = 'playing';
         winner = null;
@@ -1299,8 +1314,12 @@
       // Allow 'gameover' through so async disconnect triggers (dc.onclose) still render the overlay.
       if (gameState === 'menu') return;
 
-      // Apply remote state on guest before anything else so paddle/ball render correctly.
-      if (netMode === 'guest' && net.latestSnapshot) applySnapshotToEntities();
+      // Guest-side ball prediction: advance local ball state using last-known
+      // velocity so the puck isn't visually stuck between snapshots. Snapshot
+      // arrival lerps the authoritative position back in (applySnapshot).
+      if (netMode === 'guest' && gameState === 'playing' && net.predAnchor) {
+        ball.update();
+      }
 
       // Host watchdog: detect stale opponent (3s without any packet).
       // Guest sends a 2Hz heartbeat in gameover (rematch wait) so this still works there.
@@ -1343,9 +1362,10 @@
         user.clamp();
         user.updateVelocity();
 
-        // Smooth opponent (guest) paddle toward reported centerY to absorb jitter.
+        // Tighter smoothing (0.7) trades a little jitter tolerance for ~60ms
+        // less visible lag on the guest's paddle in the host's view.
         const targetTopY = net.remotePaddleY - ai.h / 2;
-        ai.y += (targetTopY - ai.y) * 0.5;
+        ai.y += (targetTopY - ai.y) * 0.7;
         ai.clamp();
         ai.updateVelocity();
       } else if (netMode === 'guest') {
@@ -1413,18 +1433,18 @@
       particles = particles.filter(p => p.life > 0 && p.radius > 0);
 
       // --- Network send ---
-      // Throttle: 30Hz during play, ~2Hz on gameover (heartbeat for guest's
-      // reverse transition + keeps lastRx fresh for peer heartbeats).
+      // Full 60Hz snapshot during play (keeps guest prediction cheap and
+      // correctable) + ~2Hz heartbeat during gameover.
       if (netMode === 'host' && (gameState === 'playing' || gameState === 'gameover')) {
         net.sendTick++;
-        const period = gameState === 'playing' ? 2 : 30;
-        if (net.sendTick % period === 0) netSendSnapshot();
+        if (gameState === 'playing') netSendSnapshot();
+        else if (net.sendTick % 30 === 0) netSendSnapshot();
       } else if (netMode === 'guest' && gameState === 'playing') {
         netSendInput();
       } else if (netMode === 'guest' && gameState === 'gameover') {
         // ~2Hz heartbeat so host's watchdog doesn't kill the rematch flow.
         net.sendTick++;
-        if (net.sendTick % 30 === 0) netSafeSend({ t: 'i', y: ai.centerY, ts: Date.now() });
+        if (net.sendTick % 30 === 0) netSafeSend({ t: 'i', y: ai.centerY });
       }
 
       // --- Drawing ---
@@ -1683,6 +1703,7 @@
         ball.x = W / 2; ball.y = H / 2;
         ball.trail = []; ball.lastHit = null;
         net.lastAppliedFrame = -1;
+        net.predAnchor = false;
       } else {
         ball.reset();
       }
