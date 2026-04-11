@@ -41,6 +41,25 @@
 <body>
   <canvas id="game"></canvas>
   <div id="mobile-hint">Touch &amp; drag to move paddle</div>
+  <!--
+    Hidden text field used ONLY to pop the mobile soft keyboard on the
+    join-code screen. It's not display:none (mobile browsers will refuse
+    to focus a hidden input); instead it's positioned off-screen but
+    remains focusable. See handleTap + JOIN GAME button handler for the
+    focus() calls that open the keyboard.
+  -->
+  <input
+    id="join-input"
+    type="text"
+    inputmode="text"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="characters"
+    spellcheck="false"
+    maxlength="4"
+    aria-label="Room code"
+    style="position:fixed; top:-100px; left:-100px; width:40px; height:40px; opacity:0; pointer-events:none;"
+  />
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -70,6 +89,37 @@
     let netMode = 'local'; // 'local' | 'host' | 'guest'
     let menuScreen = 'main'; // main|onlineChoice|onlineHostWait|onlineJoinInput|onlineConnecting|onlineError
     let joinCodeInput = '';
+
+    // Hidden mobile-keyboard input for the room-code entry screen.
+    // On mobile, focus() must be called from within a user-gesture handler
+    // (touchend/click) — see handleTap and the JOIN GAME button action.
+    const joinInput = document.getElementById('join-input');
+    function focusJoinInput() {
+      // pointer-events:none is lifted only while focus is needed so the
+      // element stays click-transparent when off-screen.
+      joinInput.style.pointerEvents = 'auto';
+      joinInput.value = joinCodeInput;
+      try { joinInput.focus({ preventScroll: true }); } catch { joinInput.focus(); }
+    }
+    function blurJoinInput() {
+      joinInput.blur();
+      joinInput.value = '';
+      joinInput.style.pointerEvents = 'none';
+    }
+    joinInput.addEventListener('input', () => {
+      // Filter to [A-Z0-9], uppercase, cap at 4. Keep joinCodeInput and the
+      // input element in sync so re-focusing never clobbers typed chars.
+      const cleaned = joinInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+      joinCodeInput = cleaned;
+      if (joinInput.value !== cleaned) joinInput.value = cleaned;
+    });
+    // Enter on the mobile keyboard submits the join.
+    joinInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && menuScreen === 'onlineJoinInput' && joinCodeInput.length === 4) {
+        e.preventDefault();
+        net.join(joinCodeInput);
+      }
+    });
 
     // Input
     let mouseY = H / 2;
@@ -104,32 +154,28 @@
     }, { passive: false });
     canvas.addEventListener('click', e => handleTap(e.clientX, e.clientY));
     document.addEventListener('keydown', e => {
-      // Room-code entry on join screen
+      // Room-code entry: character/backspace/Enter are handled natively by
+      // the hidden <input id="join-input"> and its own event listeners. We
+      // only need Escape here to cancel back to the online-choice screen.
       if (gameState === 'menu' && menuScreen === 'onlineJoinInput') {
-        if (e.key === 'Backspace') {
-          joinCodeInput = joinCodeInput.slice(0, -1);
-          e.preventDefault();
-          return;
-        }
-        if (e.key === 'Enter') {
-          if (joinCodeInput.length === 4) net.join(joinCodeInput);
-          return;
-        }
         if (e.key === 'Escape') {
           menuScreen = 'onlineChoice';
           joinCodeInput = '';
-          return;
-        }
-        if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) && joinCodeInput.length < 4) {
-          joinCodeInput += e.key.toUpperCase();
+          blurJoinInput();
           e.preventDefault();
-          return;
         }
         return;
       }
       if (e.key === 'Enter' || e.key === ' ') {
         if (gameState === 'menu' && menuScreen === 'main') startGame('local');
-        else if (gameState === 'gameover') showMenu();
+        else if (gameState === 'gameover') {
+          // Tell peer we're leaving so they see OPPONENT LEFT instantly
+          // instead of waiting on the watchdog.
+          if (netMode === 'host' || netMode === 'guest') {
+            try { netSafeSend({ t: 'bye' }); } catch {}
+          }
+          showMenu();
+        }
       }
     });
 
@@ -417,6 +463,9 @@
 
     // --- Menu ---
     let menuButtons = [];
+    // Separate hit-test list for the gameover overlay (REMATCH / MAIN MENU
+    // buttons live outside the menu state machine).
+    let gameoverButtons = [];
     let menuPulse = 0;
 
     function roundRect(x, y, w, h, r) {
@@ -437,14 +486,31 @@
     function handleTap(clientX, clientY) {
       const pos = getCanvasPos(clientX, clientY);
       if (gameState === 'menu') {
+        let hit = false;
         for (const btn of menuButtons) {
           if (pos.x >= btn.x && pos.x <= btn.x + btn.w && pos.y >= btn.y && pos.y <= btn.y + btn.h) {
             btn.action();
+            hit = true;
             break;
           }
         }
+        // If the user is on the join-code screen and tapped somewhere that
+        // isn't a button (e.g. on the code boxes to re-open a dismissed
+        // mobile keyboard), re-focus the hidden input. Must run in the
+        // touchend/click user-gesture stack for focus() to work on mobile.
+        if (!hit && menuScreen === 'onlineJoinInput') {
+          focusJoinInput();
+        }
       } else if (gameState === 'gameover') {
-        showMenu();
+        for (const btn of gameoverButtons) {
+          if (pos.x >= btn.x && pos.x <= btn.x + btn.w && pos.y >= btn.y && pos.y <= btn.y + btn.h) {
+            btn.action();
+            return;
+          }
+        }
+        // Fallback (e.g. disconnect screen has no buttons): tap anywhere to
+        // return to menu.
+        if (gameoverButtons.length === 0) showMenu();
       }
     }
 
@@ -560,13 +626,40 @@
     function drawOnlineChoice() {
       drawMenuTitle('🌐 Online Multiplayer');
 
+      // Color picker: tap to claim a paddle color for this game.
       ctx.font = 'bold 13px sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillText('CHOOSE A ROLE', W / 2, 200);
+      ctx.textAlign = 'center';
+      ctx.fillText('PADDLE COLOR', W / 2, 180);
 
-      const bw = 280, bh = 80, gap = 30;
+      const sw = 44, sgap = 12;
+      const rowW = PALETTE.length * sw + (PALETTE.length - 1) * sgap;
+      const rowX = W / 2 - rowW / 2;
+      const rowY = 195;
+      for (let i = 0; i < PALETTE.length; i++) {
+        const c = PALETTE[i];
+        const x = rowX + i * (sw + sgap);
+        ctx.fillStyle = c;
+        roundRect(x, rowY, sw, sw, 8);
+        if (c === net.myColor) {
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x - 1, rowY - 1, sw + 2, sw + 2);
+          ctx.lineWidth = 1;
+        }
+        menuButtons.push({
+          x, y: rowY, w: sw, h: sw,
+          action: () => { net.myColor = c; saveMyColor(c); }
+        });
+      }
+
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('CHOOSE A ROLE', W / 2, 275);
+
+      const bw = 280, bh = 72, gap = 22;
       const totalH = bh * 2 + gap;
-      const startY = H / 2 - totalH / 2 + 20;
+      const startY = 295;
 
       // Host
       const hx = W / 2 - bw / 2, hy = startY;
@@ -590,7 +683,10 @@
       ctx.fillText('Enter an opponent\u2019s room code', W / 2, jy + bh / 2 + 18);
       menuButtons.push({
         x: jx, y: jy, w: bw, h: bh,
-        action: () => { menuScreen = 'onlineJoinInput'; joinCodeInput = ''; }
+        // focus() must run inside the user-gesture stack (touchend/click)
+        // to open the mobile soft keyboard — that's why it's in the action
+        // callback rather than in a state-transition helper elsewhere.
+        action: () => { menuScreen = 'onlineJoinInput'; joinCodeInput = ''; focusJoinInput(); }
       });
 
       drawBackButton('\u2190 BACK', () => { menuScreen = 'main'; });
@@ -669,10 +765,10 @@
       ctx.fillText('JOIN', jx + jw / 2, jy + jh / 2 + 1);
       menuButtons.push({
         x: jx, y: jy, w: jw, h: jh,
-        action: () => { if (ready) net.join(joinCodeInput); }
+        action: () => { if (ready) { blurJoinInput(); net.join(joinCodeInput); } }
       });
 
-      drawBackButton('\u2190 BACK', () => { menuScreen = 'onlineChoice'; joinCodeInput = ''; });
+      drawBackButton('\u2190 BACK', () => { menuScreen = 'onlineChoice'; joinCodeInput = ''; blurJoinInput(); });
     }
 
     function drawOnlineConnecting() {
@@ -747,6 +843,17 @@
     }
 
     // --- Networking (WebRTC DataChannel P2P, signaling via /api/signal) ---
+    // Identity palette for online play. Keep these visually distinct.
+    const PALETTE = ['#ff5050', '#3264dc', '#00e5a0', '#ff9028', '#a864ff', '#28e0e0'];
+    function loadMyColor() {
+      try {
+        const saved = localStorage.getItem('tennis:color');
+        if (saved && PALETTE.includes(saved)) return saved;
+      } catch {}
+      return PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    }
+    function saveMyColor(c) { try { localStorage.setItem('tennis:color', c); } catch {} }
+
     const net = {
       role: null,            // 'host' | 'guest' | null
       pc: null,              // RTCPeerConnection
@@ -754,7 +861,7 @@
       room: null,
       state: 'idle',         // idle|creating|waiting|joining|connecting|connected|failed|closed
       errorMsg: null,
-      latestSnapshot: null,  // last host->guest snapshot
+      predAnchor: false,     // guest: has first snapshot been absorbed?
       lastAppliedFrame: -1,
       remotePaddleY: H / 2,  // host: guest's reported paddle centerY
       lastRx: 0,             // timestamp of last received message
@@ -765,7 +872,24 @@
       pendingIce: [],        // ICE candidates queued until remoteDescription is set
       connectDeadline: 0,    // timeout for connection establishment
       queryParamsShown: false,
+      // Identity + rematch
+      myColor: loadMyColor(),
+      oppColor: null,        // populated on 'hi' handshake
+      rematchMe: false,      // we clicked REMATCH
+      rematchPeer: false,    // peer sent {t:'rm'}
     };
+
+    // Apply myColor/oppColor to the correct paddle entity depending on role.
+    // Host = left (user), Guest = right (ai). Safe to call any time.
+    function applyColors() {
+      if (netMode === 'host') {
+        user.color = net.myColor;
+        if (net.oppColor) ai.color = net.oppColor;
+      } else if (netMode === 'guest') {
+        ai.color = net.myColor;
+        if (net.oppColor) user.color = net.oppColor;
+      }
+    }
 
     const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -812,7 +936,9 @@
       net.state = 'failed';
       menuScreen = 'onlineError';
       netTeardown(false);
-      if (gameState === 'playing') {
+      // Flip to disconnect overlay from either live play or a gameover screen
+      // (e.g. peer clicked MAIN MENU and sent bye while we were deciding rematch).
+      if (gameState === 'playing' || gameState === 'gameover') {
         winner = 'disconnect';
         gameState = 'gameover';
         canvas.style.cursor = 'default';
@@ -840,7 +966,7 @@
       net.room = null;
       net.role = null;
       net.state = 'idle';
-      net.latestSnapshot = null;
+      net.predAnchor = false;
       net.lastAppliedFrame = -1;
       net.remotePaddleY = H / 2;
       net.lastRx = 0;
@@ -849,6 +975,9 @@
       net.remoteDescSet = false;
       net.pendingIce.length = 0;
       net.connectDeadline = 0;
+      net.oppColor = null;
+      net.rematchMe = false;
+      net.rematchPeer = false;
     }
 
     async function flushPendingIce() {
@@ -909,6 +1038,8 @@
         setTimeout(() => { try { if (net.iceAbort) net.iceAbort.abort(); } catch {} }, 5000);
         // Host and guest both enter playing state here.
         startGame(net.role);
+        // Identity handshake: share our palette choice with the peer.
+        netSafeSend({ t: 'hi', color: net.myColor });
       };
       dc.onmessage = ev => handleNetMessage(ev.data);
       dc.onclose = () => {
@@ -1054,7 +1185,6 @@
       const snap = {
         t: 's',
         f: net.sendTick,
-        ts: Date.now(),
         b: [ball.x, ball.y, ball.vx, ball.vy, ball.spin],
         u: [user.y, user.h],
         a: [ai.y, ai.h],
@@ -1069,7 +1199,8 @@
     }
 
     function netSendInput() {
-      netSafeSend({ t: 'i', y: user.centerY, ts: Date.now() });
+      // Guest sends the RIGHT paddle's centerY (guest controls ai entity).
+      netSafeSend({ t: 'i', y: ai.centerY });
     }
 
     function handleNetMessage(raw) {
@@ -1077,11 +1208,28 @@
       let msg;
       try { msg = JSON.parse(raw); } catch { return; }
       if (!msg || typeof msg !== 'object') return;
+
+      // Role-agnostic control messages (handshake / rematch / disconnect).
+      if (msg.t === 'hi' && typeof msg.color === 'string' && PALETTE.includes(msg.color)) {
+        net.oppColor = msg.color;
+        applyColors();
+        return;
+      }
+      if (msg.t === 'rm') {
+        net.rematchPeer = true;
+        return;
+      }
+      if (msg.t === 'bye') {
+        netFail('Opponent left');
+        return;
+      }
+
       if (netMode === 'guest') {
         if (msg.t === 's') {
           if (typeof msg.f === 'number' && msg.f <= net.lastAppliedFrame) return;
-          net.latestSnapshot = msg;
           if (typeof msg.f === 'number') net.lastAppliedFrame = msg.f;
+          // Apply immediately so guest prediction has a fresh anchor.
+          applySnapshot(msg);
         } else if (msg.t === 'h') {
           // Hit event: spawn particles locally for juice.
           const color = msg.who === 'user' ? user.color : ai.color;
@@ -1094,14 +1242,31 @@
       }
     }
 
-    function applySnapshotToEntities() {
-      const s = net.latestSnapshot;
+    // Guest-side snapshot apply. Called once per fresh snapshot from
+    // handleNetMessage (not every frame) so local prediction can advance
+    // freely between packets.
+    //
+    // Ball position uses a soft lerp (30%) to absorb 1–2 frames of
+    // prediction drift without a visible snap; velocity/spin/paddle/score
+    // are authoritative (hard overwrite) because they encode collisions.
+    // A hard-snap fallback kicks in on big drifts (>50px) and on the very
+    // first snapshot (lastAppliedFrame was still -1 on arrival).
+    function applySnapshot(s) {
       if (!s) return;
       if (Array.isArray(s.b) && s.b.length >= 5) {
-        ball.x = s.b[0]; ball.y = s.b[1];
+        const firstOrHuge = net.predAnchor === false ||
+          Math.abs(s.b[0] - ball.x) > 50 || Math.abs(s.b[1] - ball.y) > 50;
+        if (firstOrHuge) {
+          ball.x = s.b[0]; ball.y = s.b[1];
+        } else {
+          // 0.5 lerp ⇒ ~97% drift eliminated in 5 snapshots at 60Hz (~83ms).
+          ball.x += (s.b[0] - ball.x) * 0.5;
+          ball.y += (s.b[1] - ball.y) * 0.5;
+        }
         ball.vx = s.b[2]; ball.vy = s.b[3]; ball.spin = s.b[4];
         ball.trail.push({ x: ball.x, y: ball.y });
         if (ball.trail.length > 10) ball.trail.shift();
+        net.predAnchor = true;
       }
       if (Array.isArray(s.u) && s.u.length >= 2) { user.y = s.u[0]; user.h = s.u[1]; }
       if (Array.isArray(s.a) && s.a.length >= 2) { ai.y = s.a[0];   ai.h = s.a[1]; }
@@ -1113,6 +1278,30 @@
         winner = scoreUser >= winScore ? 'user' : (scoreAI >= winScore ? 'ai' : winner);
         canvas.style.cursor = 'default';
       }
+      if (s.st === 'playing' && gameState === 'gameover') {
+        gameState = 'playing';
+        winner = null;
+        net.rematchMe = false;
+        net.rematchPeer = false;
+        canvas.style.cursor = 'none';
+      }
+    }
+
+    // Host-authoritative rematch: resets world state and flips gameState.
+    // Guest follows via the next 'playing' snapshot reverse-transition.
+    function hostStartRematch() {
+      scoreUser = 0; scoreAI = 0;
+      winner = null;
+      user.h = user.baseHeight; user.powerTimer = 0; user.y = H / 2 - 50;
+      ai.h   = ai.baseHeight;   ai.powerTimer   = 0; ai.y   = H / 2 - 50;
+      particles = [];
+      powerup.reset();
+      ball.reset();
+      net.rematchMe = false;
+      net.rematchPeer = false;
+      gameState = 'playing';
+      canvas.style.cursor = 'none';
+      net.lastRx = Date.now(); // grace-period the watchdog across the gap
     }
 
     // Convenience aliases used by other parts of the file
@@ -1125,17 +1314,31 @@
       // Allow 'gameover' through so async disconnect triggers (dc.onclose) still render the overlay.
       if (gameState === 'menu') return;
 
-      // Apply remote state on guest before anything else so paddle/ball render correctly.
-      if (netMode === 'guest' && net.latestSnapshot) applySnapshotToEntities();
+      // Guest-side ball prediction: advance local ball state using last-known
+      // velocity so the puck isn't visually stuck between snapshots. Snapshot
+      // arrival lerps the authoritative position back in (applySnapshot).
+      if (netMode === 'guest' && gameState === 'playing' && net.predAnchor) {
+        ball.update();
+      }
 
       // Host watchdog: detect stale opponent (3s without any packet).
+      // Guest sends a 2Hz heartbeat in gameover (rematch wait) so this still works there.
       if (netMode === 'host' && net.lastRx && Date.now() - net.lastRx > 3000) {
         netFail('Opponent disconnected');
         // Fall through to render one final frame with the gameover overlay.
       }
 
+      // Host drives rematch once both sides have confirmed.
+      if (netMode === 'host' && gameState === 'gameover' && net.rematchMe && net.rematchPeer) {
+        hostStartRematch();
+      }
+
       // --- Input & opponent paddle per mode ---
-      if (netMode === 'local') {
+      // Skip input/AI when not actively playing so gameover is visually frozen
+      // (and CPU idles — AI chase, mouse-tracking, etc. were all wasted work).
+      if (gameState !== 'playing') {
+        // still fall through to render
+      } else if (netMode === 'local') {
         const aiSpeed    = { easy: 3.5, medium: 6,   hard: 9.5 }[difficulty];
         const aiDeadzone = { easy: 35,  medium: 15,  hard: 4   }[difficulty];
         const aiError    = { easy: 70,  medium: 0,   hard: 0   }[difficulty];
@@ -1159,18 +1362,20 @@
         user.clamp();
         user.updateVelocity();
 
-        // Smooth opponent (guest) paddle toward reported centerY to absorb jitter.
+        // Tighter smoothing (0.7) trades a little jitter tolerance for ~60ms
+        // less visible lag on the guest's paddle in the host's view.
         const targetTopY = net.remotePaddleY - ai.h / 2;
-        ai.y += (targetTopY - ai.y) * 0.5;
+        ai.y += (targetTopY - ai.y) * 0.7;
         ai.clamp();
         ai.updateVelocity();
       } else if (netMode === 'guest') {
-        // Client-side prediction of own paddle; host-authoritative physics decides hits.
-        user.centerY = mouseY;
-        user.clamp();
-        user.updateVelocity();
-        // ai paddle already set by applySnapshotToEntities; compute vy for render consistency.
+        // Guest controls the RIGHT paddle (ai entity). Client-side prediction
+        // of own paddle — host-authoritative physics decides hits.
+        // user.y is owned by the snapshot; we only refresh vy for render.
+        ai.centerY = mouseY;
+        ai.clamp();
         ai.updateVelocity();
+        user.updateVelocity();
       }
 
       // --- Physics / collisions / scoring (skipped on guest; guarded by winner==null) ---
@@ -1228,14 +1433,18 @@
       particles = particles.filter(p => p.life > 0 && p.radius > 0);
 
       // --- Network send ---
-      if (netMode === 'host' && gameState === 'playing') {
+      // Full 60Hz snapshot during play (keeps guest prediction cheap and
+      // correctable) + ~2Hz heartbeat during gameover.
+      if (netMode === 'host' && (gameState === 'playing' || gameState === 'gameover')) {
         net.sendTick++;
-        if (net.sendTick % 2 === 0) netSendSnapshot();
-      } else if (netMode === 'host' && gameState === 'gameover') {
-        // Send one final snapshot so guest sees gameover state.
-        netSendSnapshot();
+        if (gameState === 'playing') netSendSnapshot();
+        else if (net.sendTick % 30 === 0) netSendSnapshot();
       } else if (netMode === 'guest' && gameState === 'playing') {
         netSendInput();
+      } else if (netMode === 'guest' && gameState === 'gameover') {
+        // ~2Hz heartbeat so host's watchdog doesn't kill the rematch flow.
+        net.sendTick++;
+        if (net.sendTick % 30 === 0) netSafeSend({ t: 'i', y: ai.centerY });
       }
 
       // --- Drawing ---
@@ -1325,15 +1534,19 @@
       ctx.fillText(`${scoreUser}     ${scoreAI}`, W / 2, 8);
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
-      // Player labels (mode-aware)
+      // Player labels (mode-aware). In online modes, brighten the local
+      // player's label and tint it with their chosen palette color so
+      // identity is unambiguous even mid-rally.
       ctx.font = 'bold 12px sans-serif';
       ctx.letterSpacing = '2px';
       const leftLabel  = netMode === 'guest' ? 'OPP' : 'YOU';
       const rightLabel = netMode === 'local' ? 'AI'  : (netMode === 'guest' ? 'YOU' : 'OPP');
-      ctx.fillStyle = 'rgba(220,50,50,0.4)';
+      const leftIsMe  = netMode === 'host';
+      const rightIsMe = netMode === 'guest';
+      ctx.fillStyle = leftIsMe ? net.myColor : 'rgba(220,50,50,0.4)';
       ctx.textAlign = 'left';
       ctx.fillText(leftLabel, 52, 34);
-      ctx.fillStyle = 'rgba(50,100,220,0.4)';
+      ctx.fillStyle = rightIsMe ? net.myColor : 'rgba(50,100,220,0.4)';
       ctx.textAlign = 'right';
       ctx.fillText(rightLabel, W - 52, 34);
       ctx.textAlign = 'center';
@@ -1344,6 +1557,33 @@
       ai.draw();
       ball.draw();
       particles.forEach(p => p.draw());
+
+      // YOU marker: persistent chevron + label over the local player's paddle
+      // in online modes. Explicit cue > clever — no fading, no animation.
+      if (netMode !== 'local') {
+        const me = netMode === 'host' ? user : ai;
+        const cx = me.x + me.w / 2;
+        // Clamp so marker stays on canvas even when paddle is near top edge.
+        const cy = Math.max(me.y - 22, 18);
+        ctx.save();
+        ctx.fillStyle = me.color;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 7, cy);
+        ctx.lineTo(cx + 7, cy);
+        ctx.lineTo(cx, cy + 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText('YOU', cx, cy - 2);
+        ctx.restore();
+      }
 
       if (gameState === 'gameover') {
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -1370,19 +1610,69 @@
         ctx.shadowBlur = 30;
         ctx.font = 'bold 80px Impact, Arial Black, sans-serif';
         ctx.fillStyle = titleColor;
-        ctx.fillText(titleText, W / 2, H / 2 - 60);
+        ctx.fillText(titleText, W / 2, H / 2 - 80);
         ctx.shadowBlur = 0;
 
         if (!isDisconnect) {
           ctx.font = '36px Impact, Arial Black, sans-serif';
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 + 10);
+          ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 - 10);
         }
 
-        ctx.font = '17px sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.fillText('Tap or press Enter to go back to menu', W / 2, H / 2 + 70);
+        // Rebuild buttons each frame so hit-test stays in sync with render.
+        gameoverButtons = [];
+        const isOnline = (netMode === 'host' || netMode === 'guest') && !isDisconnect;
+
+        if (isOnline) {
+          // REMATCH button (label flips to WAITING… after we've sent 'rm').
+          const rw = 240, rh = 56, ry = H / 2 + 45;
+          const rx = W / 2 - rw / 2;
+          const rematchLabel = net.rematchMe ? (net.rematchPeer ? 'STARTING…' : 'WAITING…') : 'REMATCH';
+          const rematchFill  = net.rematchMe ? '#6c9' : '#00e5a0';
+          ctx.fillStyle = rematchFill;
+          roundRect(rx, ry, rw, rh, 10);
+          ctx.fillStyle = '#000';
+          ctx.font = 'bold 24px Impact, Arial Black, sans-serif';
+          ctx.fillText(rematchLabel, W / 2, ry + rh / 2);
+          if (!net.rematchMe) {
+            gameoverButtons.push({
+              x: rx, y: ry, w: rw, h: rh,
+              action: () => {
+                net.rematchMe = true;
+                netSafeSend({ t: 'rm' });
+              }
+            });
+          }
+
+          // MAIN MENU button
+          const mw = 240, mh = 48, my = ry + rh + 16;
+          const mx = W / 2 - mw / 2;
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          roundRect(mx, my, mw, mh, 10);
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(mx, my, mw, mh);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 20px Impact, Arial Black, sans-serif';
+          ctx.fillText('MAIN MENU', W / 2, my + mh / 2);
+          gameoverButtons.push({
+            x: mx, y: my, w: mw, h: mh,
+            action: () => {
+              try { netSafeSend({ t: 'bye' }); } catch {}
+              showMenu();
+            }
+          });
+        } else {
+          ctx.font = '17px sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.fillText('Tap or press Enter to go back to menu', W / 2, H / 2 + 70);
+        }
         ctx.restore();
+
+        // Keep the loop alive during gameover ONLY in online modes so the
+        // rematch trigger, button label updates, and reverse 'playing'
+        // transition can run. Local mode gets a static frame (pre-v2 behavior).
+        if (netMode === 'host' || netMode === 'guest') requestAnimationFrame(gameLoop);
         return;
       }
 
@@ -1401,12 +1691,19 @@
       user.h = user.baseHeight; user.powerTimer = 0; user.y = H / 2 - 50;
       ai.h = ai.baseHeight;   ai.powerTimer = 0;   ai.y = H / 2 - 50;
       mouseY = H / 2;
+      // Apply paddle colors based on role. Opponent color may still be null
+      // until the 'hi' handshake lands; applyColors() is re-run on receipt.
+      net.rematchMe = false;
+      net.rematchPeer = false;
+      if (netMode !== 'local') applyColors();
+      else { user.color = '#dc3232'; ai.color = '#3264dc'; }
       // Guest waits for the first host snapshot to populate ball state.
       if (netMode === 'guest') {
         ball.vx = 0; ball.vy = 0; ball.spin = 0;
         ball.x = W / 2; ball.y = H / 2;
         ball.trail = []; ball.lastHit = null;
         net.lastAppliedFrame = -1;
+        net.predAnchor = false;
       } else {
         ball.reset();
       }
@@ -1421,6 +1718,7 @@
       netMode = 'local';
       menuScreen = 'main';
       joinCodeInput = '';
+      blurJoinInput();
       gameState = 'menu';
       winner = null;
       canvas.style.cursor = 'default';
