@@ -456,6 +456,9 @@
 
     // --- Menu ---
     let menuButtons = [];
+    // Separate hit-test list for the gameover overlay (REMATCH / MAIN MENU
+    // buttons live outside the menu state machine).
+    let gameoverButtons = [];
     let menuPulse = 0;
 
     function roundRect(x, y, w, h, r) {
@@ -492,7 +495,15 @@
           focusJoinInput();
         }
       } else if (gameState === 'gameover') {
-        showMenu();
+        for (const btn of gameoverButtons) {
+          if (pos.x >= btn.x && pos.x <= btn.x + btn.w && pos.y >= btn.y && pos.y <= btn.y + btn.h) {
+            btn.action();
+            return;
+          }
+        }
+        // Fallback (e.g. disconnect screen has no buttons): tap anywhere to
+        // return to menu.
+        if (gameoverButtons.length === 0) showMenu();
       }
     }
 
@@ -608,13 +619,40 @@
     function drawOnlineChoice() {
       drawMenuTitle('🌐 Online Multiplayer');
 
+      // Color picker: tap to claim a paddle color for this game.
       ctx.font = 'bold 13px sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillText('CHOOSE A ROLE', W / 2, 200);
+      ctx.textAlign = 'center';
+      ctx.fillText('PADDLE COLOR', W / 2, 180);
 
-      const bw = 280, bh = 80, gap = 30;
+      const sw = 44, sgap = 12;
+      const rowW = PALETTE.length * sw + (PALETTE.length - 1) * sgap;
+      const rowX = W / 2 - rowW / 2;
+      const rowY = 195;
+      for (let i = 0; i < PALETTE.length; i++) {
+        const c = PALETTE[i];
+        const x = rowX + i * (sw + sgap);
+        ctx.fillStyle = c;
+        roundRect(x, rowY, sw, sw, 8);
+        if (c === net.myColor) {
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x - 1, rowY - 1, sw + 2, sw + 2);
+          ctx.lineWidth = 1;
+        }
+        menuButtons.push({
+          x, y: rowY, w: sw, h: sw,
+          action: () => { net.myColor = c; saveMyColor(c); }
+        });
+      }
+
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('CHOOSE A ROLE', W / 2, 275);
+
+      const bw = 280, bh = 72, gap = 22;
       const totalH = bh * 2 + gap;
-      const startY = H / 2 - totalH / 2 + 20;
+      const startY = 295;
 
       // Host
       const hx = W / 2 - bw / 2, hy = startY;
@@ -798,6 +836,17 @@
     }
 
     // --- Networking (WebRTC DataChannel P2P, signaling via /api/signal) ---
+    // Identity palette for online play. Keep these visually distinct.
+    const PALETTE = ['#ff5050', '#3264dc', '#00e5a0', '#ff9028', '#a864ff', '#28e0e0'];
+    function loadMyColor() {
+      try {
+        const saved = localStorage.getItem('tennis:color');
+        if (saved && PALETTE.includes(saved)) return saved;
+      } catch {}
+      return PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    }
+    function saveMyColor(c) { try { localStorage.setItem('tennis:color', c); } catch {} }
+
     const net = {
       role: null,            // 'host' | 'guest' | null
       pc: null,              // RTCPeerConnection
@@ -816,7 +865,24 @@
       pendingIce: [],        // ICE candidates queued until remoteDescription is set
       connectDeadline: 0,    // timeout for connection establishment
       queryParamsShown: false,
+      // Identity + rematch
+      myColor: loadMyColor(),
+      oppColor: null,        // populated on 'hi' handshake
+      rematchMe: false,      // we clicked REMATCH
+      rematchPeer: false,    // peer sent {t:'rm'}
     };
+
+    // Apply myColor/oppColor to the correct paddle entity depending on role.
+    // Host = left (user), Guest = right (ai). Safe to call any time.
+    function applyColors() {
+      if (netMode === 'host') {
+        user.color = net.myColor;
+        if (net.oppColor) ai.color = net.oppColor;
+      } else if (netMode === 'guest') {
+        ai.color = net.myColor;
+        if (net.oppColor) user.color = net.oppColor;
+      }
+    }
 
     const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -900,6 +966,9 @@
       net.remoteDescSet = false;
       net.pendingIce.length = 0;
       net.connectDeadline = 0;
+      net.oppColor = null;
+      net.rematchMe = false;
+      net.rematchPeer = false;
     }
 
     async function flushPendingIce() {
@@ -960,6 +1029,8 @@
         setTimeout(() => { try { if (net.iceAbort) net.iceAbort.abort(); } catch {} }, 5000);
         // Host and guest both enter playing state here.
         startGame(net.role);
+        // Identity handshake: share our palette choice with the peer.
+        netSafeSend({ t: 'hi', color: net.myColor });
       };
       dc.onmessage = ev => handleNetMessage(ev.data);
       dc.onclose = () => {
@@ -1120,7 +1191,8 @@
     }
 
     function netSendInput() {
-      netSafeSend({ t: 'i', y: user.centerY, ts: Date.now() });
+      // Guest sends the RIGHT paddle's centerY (guest controls ai entity).
+      netSafeSend({ t: 'i', y: ai.centerY, ts: Date.now() });
     }
 
     function handleNetMessage(raw) {
@@ -1128,6 +1200,22 @@
       let msg;
       try { msg = JSON.parse(raw); } catch { return; }
       if (!msg || typeof msg !== 'object') return;
+
+      // Role-agnostic control messages (handshake / rematch / disconnect).
+      if (msg.t === 'hi' && typeof msg.color === 'string' && PALETTE.includes(msg.color)) {
+        net.oppColor = msg.color;
+        applyColors();
+        return;
+      }
+      if (msg.t === 'rm') {
+        net.rematchPeer = true;
+        return;
+      }
+      if (msg.t === 'bye') {
+        netFail('Opponent left');
+        return;
+      }
+
       if (netMode === 'guest') {
         if (msg.t === 's') {
           if (typeof msg.f === 'number' && msg.f <= net.lastAppliedFrame) return;
@@ -1164,6 +1252,32 @@
         winner = scoreUser >= winScore ? 'user' : (scoreAI >= winScore ? 'ai' : winner);
         canvas.style.cursor = 'default';
       }
+      // Host-authoritative rematch: if host transitions back to playing,
+      // follow them and clear any leftover rematch UI affordance.
+      if (s.st === 'playing' && gameState === 'gameover') {
+        gameState = 'playing';
+        winner = null;
+        net.rematchMe = false;
+        net.rematchPeer = false;
+        canvas.style.cursor = 'none';
+      }
+    }
+
+    // Host-authoritative rematch: resets world state and flips gameState.
+    // Guest follows via the next 'playing' snapshot reverse-transition.
+    function hostStartRematch() {
+      scoreUser = 0; scoreAI = 0;
+      winner = null;
+      user.h = user.baseHeight; user.powerTimer = 0; user.y = H / 2 - 50;
+      ai.h   = ai.baseHeight;   ai.powerTimer   = 0; ai.y   = H / 2 - 50;
+      particles = [];
+      powerup.reset();
+      ball.reset();
+      net.rematchMe = false;
+      net.rematchPeer = false;
+      gameState = 'playing';
+      canvas.style.cursor = 'none';
+      net.lastRx = Date.now(); // grace-period the watchdog across the gap
     }
 
     // Convenience aliases used by other parts of the file
@@ -1183,6 +1297,11 @@
       if (netMode === 'host' && net.lastRx && Date.now() - net.lastRx > 3000) {
         netFail('Opponent disconnected');
         // Fall through to render one final frame with the gameover overlay.
+      }
+
+      // Host drives rematch once both sides have confirmed.
+      if (netMode === 'host' && gameState === 'gameover' && net.rematchMe && net.rematchPeer) {
+        hostStartRematch();
       }
 
       // --- Input & opponent paddle per mode ---
@@ -1216,12 +1335,13 @@
         ai.clamp();
         ai.updateVelocity();
       } else if (netMode === 'guest') {
-        // Client-side prediction of own paddle; host-authoritative physics decides hits.
-        user.centerY = mouseY;
-        user.clamp();
-        user.updateVelocity();
-        // ai paddle already set by applySnapshotToEntities; compute vy for render consistency.
+        // Guest controls the RIGHT paddle (ai entity). Client-side prediction
+        // of own paddle — host-authoritative physics decides hits.
+        // user.y is owned by the snapshot; we only refresh vy for render.
+        ai.centerY = mouseY;
+        ai.clamp();
         ai.updateVelocity();
+        user.updateVelocity();
       }
 
       // --- Physics / collisions / scoring (skipped on guest; guarded by winner==null) ---
@@ -1376,15 +1496,19 @@
       ctx.fillText(`${scoreUser}     ${scoreAI}`, W / 2, 8);
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
-      // Player labels (mode-aware)
+      // Player labels (mode-aware). In online modes, brighten the local
+      // player's label and tint it with their chosen palette color so
+      // identity is unambiguous even mid-rally.
       ctx.font = 'bold 12px sans-serif';
       ctx.letterSpacing = '2px';
       const leftLabel  = netMode === 'guest' ? 'OPP' : 'YOU';
       const rightLabel = netMode === 'local' ? 'AI'  : (netMode === 'guest' ? 'YOU' : 'OPP');
-      ctx.fillStyle = 'rgba(220,50,50,0.4)';
+      const leftIsMe  = netMode === 'host';
+      const rightIsMe = netMode === 'guest';
+      ctx.fillStyle = leftIsMe ? net.myColor : 'rgba(220,50,50,0.4)';
       ctx.textAlign = 'left';
       ctx.fillText(leftLabel, 52, 34);
-      ctx.fillStyle = 'rgba(50,100,220,0.4)';
+      ctx.fillStyle = rightIsMe ? net.myColor : 'rgba(50,100,220,0.4)';
       ctx.textAlign = 'right';
       ctx.fillText(rightLabel, W - 52, 34);
       ctx.textAlign = 'center';
@@ -1395,6 +1519,32 @@
       ai.draw();
       ball.draw();
       particles.forEach(p => p.draw());
+
+      // YOU marker: persistent chevron + label over the local player's paddle
+      // in online modes. Explicit cue > clever — no fading, no animation.
+      if (netMode !== 'local') {
+        const me = netMode === 'host' ? user : ai;
+        const cx = me.x + me.w / 2;
+        const cy = me.y - 22;
+        ctx.save();
+        ctx.fillStyle = me.color;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 7, cy);
+        ctx.lineTo(cx + 7, cy);
+        ctx.lineTo(cx, cy + 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText('YOU', cx, cy - 2);
+        ctx.restore();
+      }
 
       if (gameState === 'gameover') {
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -1421,19 +1571,68 @@
         ctx.shadowBlur = 30;
         ctx.font = 'bold 80px Impact, Arial Black, sans-serif';
         ctx.fillStyle = titleColor;
-        ctx.fillText(titleText, W / 2, H / 2 - 60);
+        ctx.fillText(titleText, W / 2, H / 2 - 80);
         ctx.shadowBlur = 0;
 
         if (!isDisconnect) {
           ctx.font = '36px Impact, Arial Black, sans-serif';
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 + 10);
+          ctx.fillText(`${scoreUser}  —  ${scoreAI}`, W / 2, H / 2 - 10);
         }
 
-        ctx.font = '17px sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
-        ctx.fillText('Tap or press Enter to go back to menu', W / 2, H / 2 + 70);
+        // Rebuild buttons each frame so hit-test stays in sync with render.
+        gameoverButtons = [];
+        const isOnline = (netMode === 'host' || netMode === 'guest') && !isDisconnect;
+
+        if (isOnline) {
+          // REMATCH button (label flips to WAITING… after we've sent 'rm').
+          const rw = 240, rh = 56, ry = H / 2 + 45;
+          const rx = W / 2 - rw / 2;
+          const rematchLabel = net.rematchMe ? (net.rematchPeer ? 'STARTING…' : 'WAITING…') : 'REMATCH';
+          const rematchFill  = net.rematchMe ? '#6c9' : '#00e5a0';
+          ctx.fillStyle = rematchFill;
+          roundRect(rx, ry, rw, rh, 10);
+          ctx.fillStyle = '#000';
+          ctx.font = 'bold 24px Impact, Arial Black, sans-serif';
+          ctx.fillText(rematchLabel, W / 2, ry + rh / 2);
+          if (!net.rematchMe) {
+            gameoverButtons.push({
+              x: rx, y: ry, w: rw, h: rh,
+              action: () => {
+                net.rematchMe = true;
+                netSafeSend({ t: 'rm' });
+              }
+            });
+          }
+
+          // MAIN MENU button
+          const mw = 240, mh = 48, my = ry + rh + 16;
+          const mx = W / 2 - mw / 2;
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          roundRect(mx, my, mw, mh, 10);
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(mx, my, mw, mh);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 20px Impact, Arial Black, sans-serif';
+          ctx.fillText('MAIN MENU', W / 2, my + mh / 2);
+          gameoverButtons.push({
+            x: mx, y: my, w: mw, h: mh,
+            action: () => {
+              try { netSafeSend({ t: 'bye' }); } catch {}
+              showMenu();
+            }
+          });
+        } else {
+          ctx.font = '17px sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.fillText('Tap or press Enter to go back to menu', W / 2, H / 2 + 70);
+        }
         ctx.restore();
+
+        // Keep the loop alive during gameover so the rematch trigger,
+        // button label updates, and reverse 'playing' transition can run.
+        requestAnimationFrame(gameLoop);
         return;
       }
 
@@ -1452,6 +1651,12 @@
       user.h = user.baseHeight; user.powerTimer = 0; user.y = H / 2 - 50;
       ai.h = ai.baseHeight;   ai.powerTimer = 0;   ai.y = H / 2 - 50;
       mouseY = H / 2;
+      // Apply paddle colors based on role. Opponent color may still be null
+      // until the 'hi' handshake lands; applyColors() is re-run on receipt.
+      net.rematchMe = false;
+      net.rematchPeer = false;
+      if (netMode !== 'local') applyColors();
+      else { user.color = '#dc3232'; ai.color = '#3264dc'; }
       // Guest waits for the first host snapshot to populate ball state.
       if (netMode === 'guest') {
         ball.vx = 0; ball.vy = 0; ball.spin = 0;
