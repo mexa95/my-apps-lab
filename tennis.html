@@ -168,7 +168,14 @@
       }
       if (e.key === 'Enter' || e.key === ' ') {
         if (gameState === 'menu' && menuScreen === 'main') startGame('local');
-        else if (gameState === 'gameover') showMenu();
+        else if (gameState === 'gameover') {
+          // Tell peer we're leaving so they see OPPONENT LEFT instantly
+          // instead of waiting on the watchdog.
+          if (netMode === 'host' || netMode === 'guest') {
+            try { netSafeSend({ t: 'bye' }); } catch {}
+          }
+          showMenu();
+        }
       }
     });
 
@@ -929,7 +936,9 @@
       net.state = 'failed';
       menuScreen = 'onlineError';
       netTeardown(false);
-      if (gameState === 'playing') {
+      // Flip to disconnect overlay from either live play or a gameover screen
+      // (e.g. peer clicked MAIN MENU and sent bye while we were deciding rematch).
+      if (gameState === 'playing' || gameState === 'gameover') {
         winner = 'disconnect';
         gameState = 'gameover';
         canvas.style.cursor = 'default';
@@ -1294,6 +1303,7 @@
       if (netMode === 'guest' && net.latestSnapshot) applySnapshotToEntities();
 
       // Host watchdog: detect stale opponent (3s without any packet).
+      // Guest sends a 2Hz heartbeat in gameover (rematch wait) so this still works there.
       if (netMode === 'host' && net.lastRx && Date.now() - net.lastRx > 3000) {
         netFail('Opponent disconnected');
         // Fall through to render one final frame with the gameover overlay.
@@ -1305,7 +1315,11 @@
       }
 
       // --- Input & opponent paddle per mode ---
-      if (netMode === 'local') {
+      // Skip input/AI when not actively playing so gameover is visually frozen
+      // (and CPU idles — AI chase, mouse-tracking, etc. were all wasted work).
+      if (gameState !== 'playing') {
+        // still fall through to render
+      } else if (netMode === 'local') {
         const aiSpeed    = { easy: 3.5, medium: 6,   hard: 9.5 }[difficulty];
         const aiDeadzone = { easy: 35,  medium: 15,  hard: 4   }[difficulty];
         const aiError    = { easy: 70,  medium: 0,   hard: 0   }[difficulty];
@@ -1399,14 +1413,18 @@
       particles = particles.filter(p => p.life > 0 && p.radius > 0);
 
       // --- Network send ---
-      if (netMode === 'host' && gameState === 'playing') {
+      // Throttle: 30Hz during play, ~2Hz on gameover (heartbeat for guest's
+      // reverse transition + keeps lastRx fresh for peer heartbeats).
+      if (netMode === 'host' && (gameState === 'playing' || gameState === 'gameover')) {
         net.sendTick++;
-        if (net.sendTick % 2 === 0) netSendSnapshot();
-      } else if (netMode === 'host' && gameState === 'gameover') {
-        // Send one final snapshot so guest sees gameover state.
-        netSendSnapshot();
+        const period = gameState === 'playing' ? 2 : 30;
+        if (net.sendTick % period === 0) netSendSnapshot();
       } else if (netMode === 'guest' && gameState === 'playing') {
         netSendInput();
+      } else if (netMode === 'guest' && gameState === 'gameover') {
+        // ~2Hz heartbeat so host's watchdog doesn't kill the rematch flow.
+        net.sendTick++;
+        if (net.sendTick % 30 === 0) netSafeSend({ t: 'i', y: ai.centerY, ts: Date.now() });
       }
 
       // --- Drawing ---
@@ -1525,7 +1543,8 @@
       if (netMode !== 'local') {
         const me = netMode === 'host' ? user : ai;
         const cx = me.x + me.w / 2;
-        const cy = me.y - 22;
+        // Clamp so marker stays on canvas even when paddle is near top edge.
+        const cy = Math.max(me.y - 22, 18);
         ctx.save();
         ctx.fillStyle = me.color;
         ctx.strokeStyle = 'rgba(0,0,0,0.6)';
@@ -1630,9 +1649,10 @@
         }
         ctx.restore();
 
-        // Keep the loop alive during gameover so the rematch trigger,
-        // button label updates, and reverse 'playing' transition can run.
-        requestAnimationFrame(gameLoop);
+        // Keep the loop alive during gameover ONLY in online modes so the
+        // rematch trigger, button label updates, and reverse 'playing'
+        // transition can run. Local mode gets a static frame (pre-v2 behavior).
+        if (netMode === 'host' || netMode === 'guest') requestAnimationFrame(gameLoop);
         return;
       }
 
