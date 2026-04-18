@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pranayama — Nadi Sodhana</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090b0e;
+      --surface: #111419;
+      --border: #1c2028;
+      --text: #d0ccc4;
+      --dim: #4e4d4a;
+      --inhale: #5ba4d9;
+      --hold: #a78bfa;
+      --exhale: #5bd9a4;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 460px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      animation: fadeIn 0.6s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .header { text-align: center; }
+
+    .header h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 1.9rem;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+      background: linear-gradient(135deg, var(--inhale), var(--exhale));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header p {
+      font-size: 0.78rem;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+    }
+
+    /* Nostril visual container */
+    .nose-wrap {
+      position: relative;
+      width: 280px;
+      height: 280px;
+    }
+
+    .nose-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* SVG nostril glow elements — CSS transform scaling around their own center */
+    #leftGlow, #rightGlow {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 0.8s ease-in-out, opacity 0.4s ease;
+    }
+
+    /* Flow dot animations */
+    @keyframes floatUp {
+      0%   { transform: translateY(10px); opacity: 0; }
+      20%  { opacity: 0.85; }
+      100% { transform: translateY(-14px); opacity: 0; }
+    }
+    @keyframes floatDown {
+      0%   { transform: translateY(-10px); opacity: 0; }
+      20%  { opacity: 0.85; }
+      100% { transform: translateY(14px); opacity: 0; }
+    }
+
+    .dot-flow-up {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: floatUp 1.4s ease-in infinite;
+    }
+    .dot-flow-up:nth-child(2) { animation-delay: 0.47s; }
+    .dot-flow-up:nth-child(3) { animation-delay: 0.94s; }
+
+    .dot-flow-down {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: floatDown 1.4s ease-in infinite;
+    }
+    .dot-flow-down:nth-child(2) { animation-delay: 0.47s; }
+    .dot-flow-down:nth-child(3) { animation-delay: 0.94s; }
+
+    /* Center overlay */
+    .center-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      pointer-events: none;
+      padding-bottom: 70px; /* shift up to sit above the nostrils */
+    }
+
+    .phase-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 1.4rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      transition: color 0.3s ease;
+      min-height: 30px;
+    }
+
+    .count-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 4.5rem;
+      line-height: 1;
+      margin-top: 2px;
+      transition: color 0.3s ease;
+    }
+
+    .guide-text {
+      font-size: 0.68rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 8px;
+      transition: color 0.3s ease;
+    }
+
+    .cycle-text {
+      font-size: 0.62rem;
+      color: var(--dim);
+      letter-spacing: 2px;
+      margin-top: 6px;
+    }
+
+    /* Duration selector */
+    .options { text-align: center; }
+
+    .options label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--dim);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .dur-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .dur-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--dim);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 9px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .dur-btn:hover { border-color: var(--inhale); color: var(--inhale); }
+    .dur-btn.selected { border-color: var(--inhale); color: var(--inhale); background: rgba(91,164,217,0.08); }
+
+    /* Sound toggle */
+    .toggle-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--dim);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-row input { display: none; }
+
+    .toggle-track {
+      width: 34px;
+      height: 18px;
+      background: var(--border);
+      border-radius: 9px;
+      position: relative;
+      transition: background 0.2s ease;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--dim);
+      top: 2px; left: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .toggle-row input:checked + .toggle-track { background: var(--inhale); }
+    .toggle-row input:checked + .toggle-track::after { left: 18px; background: white; }
+
+    /* Main button */
+    .start-btn {
+      appearance: none;
+      border: 1px solid var(--inhale);
+      background: transparent;
+      color: var(--inhale);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      padding: 15px 48px;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .start-btn:hover { box-shadow: 0 0 28px rgba(91,164,217,0.15); }
+    .start-btn:active { transform: scale(0.97); }
+
+    /* Progress bar */
+    .total-bar-wrap { width: 100%; max-width: 260px; }
+
+    .total-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .total-bar-track {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .total-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 3px;
+      background: var(--inhale);
+      transition: width 0.5s linear, background 0.3s ease;
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.68rem;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 400px) {
+      .nose-wrap { width: 240px; height: 240px; }
+      .count-text { font-size: 3.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Pranayama</h1>
+      <p>Nadi Sodhana — Alternate Nostril Breathing</p>
+    </div>
+
+    <div class="nose-wrap">
+      <svg class="nose-svg" viewBox="0 0 280 280">
+        <defs>
+          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="6" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <filter id="ringGlow" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- Outer cycle progress ring -->
+        <circle cx="140" cy="140" r="130" fill="none" stroke="#1c2028" stroke-width="1.5"/>
+        <circle id="progressArc"
+          cx="140" cy="140" r="130"
+          fill="none"
+          stroke="var(--inhale)"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-dasharray="817"
+          stroke-dashoffset="817"
+          transform="rotate(-90 140 140)"
+          filter="url(#ringGlow)"/>
+
+        <!-- Nose bridge — left side -->
+        <path d="M 140,72 C 127,90 103,122 88,155 C 79,173 81,184 88,188"
+              fill="none" stroke="#252b35" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Nose bridge — right side -->
+        <path d="M 140,72 C 153,90 177,122 192,155 C 201,173 199,184 192,188"
+              fill="none" stroke="#252b35" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Bottom arc connecting nostrils -->
+        <path d="M 88,188 Q 140,206 192,188"
+              fill="none" stroke="#252b35" stroke-width="2.5" stroke-linecap="round"/>
+
+        <!-- ── LEFT NOSTRIL ── -->
+        <!-- Background -->
+        <ellipse cx="88" cy="198" rx="28" ry="20" fill="#0c0f13" stroke="#1c2028" stroke-width="1.5"/>
+        <!-- Active glow (shown when open) -->
+        <ellipse id="leftGlow" cx="88" cy="198" rx="28" ry="20"
+          fill="#5ba4d933" stroke="#5ba4d9" stroke-width="2.5"
+          filter="url(#glow)" opacity="0"/>
+        <!-- Closed overlay -->
+        <ellipse id="leftClosed" cx="88" cy="198" rx="28" ry="20"
+          fill="#1a1e26" opacity="0"/>
+        <!-- Closed × mark -->
+        <g id="leftX" opacity="0">
+          <line x1="76" y1="188" x2="100" y2="208" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+          <line x1="100" y1="188" x2="76" y2="208" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+        </g>
+        <!-- Label -->
+        <text id="leftLabel" x="88" y="230" text-anchor="middle"
+          font-size="8.5" font-family="DM Sans, sans-serif"
+          letter-spacing="2" fill="#4e4d4a">LEFT</text>
+        <!-- Flow dots — inhale (float up) -->
+        <g id="leftFlowIn" opacity="0">
+          <circle class="dot-flow-up" cx="88" cy="204" r="2.5" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="84" cy="201" r="2" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="92" cy="201" r="2" fill="#5ba4d9"/>
+        </g>
+        <!-- Flow dots — exhale (float down) -->
+        <g id="leftFlowOut" opacity="0">
+          <circle class="dot-flow-down" cx="88" cy="192" r="2.5" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="84" cy="195" r="2" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="92" cy="195" r="2" fill="#5bd9a4"/>
+        </g>
+
+        <!-- ── RIGHT NOSTRIL ── -->
+        <!-- Background -->
+        <ellipse cx="192" cy="198" rx="28" ry="20" fill="#0c0f13" stroke="#1c2028" stroke-width="1.5"/>
+        <!-- Active glow (shown when open) -->
+        <ellipse id="rightGlow" cx="192" cy="198" rx="28" ry="20"
+          fill="#5ba4d933" stroke="#5ba4d9" stroke-width="2.5"
+          filter="url(#glow)" opacity="0"/>
+        <!-- Closed overlay -->
+        <ellipse id="rightClosed" cx="192" cy="198" rx="28" ry="20"
+          fill="#1a1e26" opacity="0"/>
+        <!-- Closed × mark -->
+        <g id="rightX" opacity="0">
+          <line x1="180" y1="188" x2="204" y2="208" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+          <line x1="204" y1="188" x2="180" y2="208" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+        </g>
+        <!-- Label -->
+        <text id="rightLabel" x="192" y="230" text-anchor="middle"
+          font-size="8.5" font-family="DM Sans, sans-serif"
+          letter-spacing="2" fill="#4e4d4a">RIGHT</text>
+        <!-- Flow dots — inhale (float up) -->
+        <g id="rightFlowIn" opacity="0">
+          <circle class="dot-flow-up" cx="192" cy="204" r="2.5" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="188" cy="201" r="2" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="196" cy="201" r="2" fill="#5ba4d9"/>
+        </g>
+        <!-- Flow dots — exhale (float down) -->
+        <g id="rightFlowOut" opacity="0">
+          <circle class="dot-flow-down" cx="192" cy="192" r="2.5" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="188" cy="195" r="2" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="196" cy="195" r="2" fill="#5bd9a4"/>
+        </g>
+      </svg>
+
+      <!-- Centered count/phase overlay (sits above nostrils) -->
+      <div class="center-overlay">
+        <div class="phase-text" id="phaseText">Ready</div>
+        <div class="count-text" id="countText">4</div>
+        <div class="guide-text" id="guideText" style="color:var(--dim)">Nadi Sodhana</div>
+        <div class="cycle-text" id="cycleText"></div>
+      </div>
+    </div>
+
+    <div class="total-bar-wrap hidden" id="totalBarWrap">
+      <div class="total-bar-label">
+        <span id="elapsed">0:00</span>
+        <span id="totalTime">0:00</span>
+      </div>
+      <div class="total-bar-track">
+        <div class="total-bar" id="totalBar"></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--inhale)"></div>Inhale</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--hold)"></div>Hold</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--exhale)"></div>Exhale</div>
+    </div>
+
+    <div class="options" id="options">
+      <label>Session Duration</label>
+      <div class="dur-row">
+        <button class="dur-btn" data-min="2">2 min</button>
+        <button class="dur-btn selected" data-min="5">5 min</button>
+        <button class="dur-btn" data-min="10">10 min</button>
+        <button class="dur-btn" data-min="15">15 min</button>
+        <button class="dur-btn" data-min="20">20 min</button>
+      </div>
+    </div>
+
+    <label class="toggle-row">
+      <span>Sound cues</span>
+      <input type="checkbox" id="soundToggle" checked>
+      <div class="toggle-track"></div>
+    </label>
+
+    <button class="start-btn" id="startBtn">Begin</button>
+  </div>
+
+  <script>
+    // ── Audio ──────────────────────────────────────────────────────────────
+    let audioCtx = null;
+    function getCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playTick() {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, t);
+      g.gain.setValueAtTime(0.12, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.15);
+    }
+
+    function playPhaseChange(freq) {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.5);
+    }
+
+    function playGong() {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.35, t);
+      master.gain.exponentialRampToValueAtTime(0.001, t + 4);
+      master.connect(ctx.destination);
+      [130, 195, 260, 390].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.3 / (i + 1), t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 3.5);
+        o.connect(g); g.connect(master);
+        o.start(t); o.stop(t + 4);
+      });
+    }
+
+    // ── Nadi Sodhana phases ────────────────────────────────────────────────
+    // One full cycle = 6 phases × 4s = 24s
+    // Phase 0: inhale left    Phase 1: hold both    Phase 2: exhale right
+    // Phase 3: inhale right   Phase 4: hold both    Phase 5: exhale left
+    const phases = [
+      { name: 'Inhale',  guide: 'Left nostril',  hex: '#5ba4d9', open: 'left',  flow: 'in',   freq: 396 },
+      { name: 'Hold',    guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,   freq: 528 },
+      { name: 'Exhale',  guide: 'Right nostril', hex: '#5bd9a4', open: 'right', flow: 'out',  freq: 432 },
+      { name: 'Inhale',  guide: 'Right nostril', hex: '#5ba4d9', open: 'right', flow: 'in',   freq: 396 },
+      { name: 'Hold',    guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,   freq: 528 },
+      { name: 'Exhale',  guide: 'Left nostril',  hex: '#5bd9a4', open: 'left',  flow: 'out',  freq: 432 },
+    ];
+
+    const BEAT       = 4;
+    const NUM_PHASES = phases.length;   // 6
+    const CYCLE      = BEAT * NUM_PHASES; // 24s
+    const RING_CIRC  = 2 * Math.PI * 130; // ~817
+
+    // ── DOM refs ───────────────────────────────────────────────────────────
+    const phaseText    = document.getElementById('phaseText');
+    const countText    = document.getElementById('countText');
+    const guideText    = document.getElementById('guideText');
+    const cycleText    = document.getElementById('cycleText');
+    const startBtn     = document.getElementById('startBtn');
+    const optionsEl    = document.getElementById('options');
+    const totalBarWrap = document.getElementById('totalBarWrap');
+    const totalBar     = document.getElementById('totalBar');
+    const elapsedEl    = document.getElementById('elapsed');
+    const totalTimeEl  = document.getElementById('totalTime');
+    const progressArc  = document.getElementById('progressArc');
+
+    const leftGlow     = document.getElementById('leftGlow');
+    const rightGlow    = document.getElementById('rightGlow');
+    const leftClosed   = document.getElementById('leftClosed');
+    const rightClosed  = document.getElementById('rightClosed');
+    const leftX        = document.getElementById('leftX');
+    const rightX       = document.getElementById('rightX');
+    const leftLabel    = document.getElementById('leftLabel');
+    const rightLabel   = document.getElementById('rightLabel');
+    const leftFlowIn   = document.getElementById('leftFlowIn');
+    const leftFlowOut  = document.getElementById('leftFlowOut');
+    const rightFlowIn  = document.getElementById('rightFlowIn');
+    const rightFlowOut = document.getElementById('rightFlowOut');
+
+    let selectedMinutes = 5;
+    let running = false;
+    let animFrame = null;
+
+    document.querySelectorAll('.dur-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (running) return;
+        document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedMinutes = parseInt(btn.dataset.min);
+      });
+    });
+
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    // ── Nostril state update ───────────────────────────────────────────────
+    function applyNostrilState(phaseIndex, phaseFrac) {
+      const p = phases[phaseIndex];
+      const hex = p.hex;
+
+      // Reset all
+      leftGlow.setAttribute('opacity', '0');
+      rightGlow.setAttribute('opacity', '0');
+      leftClosed.setAttribute('opacity', '0');
+      rightClosed.setAttribute('opacity', '0');
+      leftX.setAttribute('opacity', '0');
+      rightX.setAttribute('opacity', '0');
+      leftFlowIn.setAttribute('opacity', '0');
+      leftFlowOut.setAttribute('opacity', '0');
+      rightFlowIn.setAttribute('opacity', '0');
+      rightFlowOut.setAttribute('opacity', '0');
+      leftLabel.setAttribute('fill', '#4e4d4a');
+      rightLabel.setAttribute('fill', '#4e4d4a');
+
+      // Breathing scale: expand on inhale, contract on exhale, hold stays
+      let scale;
+      if (p.name === 'Inhale') scale = 1 + phaseFrac * 0.45;
+      else if (p.name === 'Exhale') scale = 1.45 - phaseFrac * 0.45;
+      else scale = 1.45; // Hold — remain expanded
+
+      if (p.open === 'left') {
+        leftGlow.setAttribute('fill', hex + '2e');
+        leftGlow.setAttribute('stroke', hex);
+        leftGlow.setAttribute('opacity', '1');
+        leftGlow.style.transform = `scale(${scale})`;
+        leftLabel.setAttribute('fill', hex);
+        rightClosed.setAttribute('opacity', '0.65');
+        rightX.setAttribute('opacity', '1');
+        if (p.flow === 'in')  leftFlowIn.setAttribute('opacity', '1');
+        if (p.flow === 'out') leftFlowOut.setAttribute('opacity', '1');
+
+      } else if (p.open === 'right') {
+        rightGlow.setAttribute('fill', hex + '2e');
+        rightGlow.setAttribute('stroke', hex);
+        rightGlow.setAttribute('opacity', '1');
+        rightGlow.style.transform = `scale(${scale})`;
+        rightLabel.setAttribute('fill', hex);
+        leftClosed.setAttribute('opacity', '0.65');
+        leftX.setAttribute('opacity', '1');
+        if (p.flow === 'in')  rightFlowIn.setAttribute('opacity', '1');
+        if (p.flow === 'out') rightFlowOut.setAttribute('opacity', '1');
+
+      } else {
+        // Both closed (hold)
+        leftClosed.setAttribute('opacity', '0.65');
+        rightClosed.setAttribute('opacity', '0.65');
+        leftX.setAttribute('opacity', '1');
+        rightX.setAttribute('opacity', '1');
+      }
+    }
+
+    function resetNostrilState() {
+      [leftGlow, rightGlow, leftClosed, rightClosed, leftX, rightX,
+       leftFlowIn, leftFlowOut, rightFlowIn, rightFlowOut].forEach(el => {
+        el.setAttribute('opacity', '0');
+      });
+      leftLabel.setAttribute('fill', '#4e4d4a');
+      rightLabel.setAttribute('fill', '#4e4d4a');
+      leftGlow.style.transform = '';
+      rightGlow.style.transform = '';
+    }
+
+    // ── Main session loop ──────────────────────────────────────────────────
+    function startSession() {
+      running = true;
+      startBtn.textContent = 'Stop';
+      optionsEl.style.opacity = '0.3';
+      optionsEl.style.pointerEvents = 'none';
+      totalBarWrap.classList.remove('hidden');
+
+      const totalSecs = selectedMinutes * 60;
+      totalTimeEl.textContent = formatTime(totalSecs);
+      const startTime = performance.now();
+      let lastCount = -1, lastPhase = -1;
+
+      playGong();
+
+      function tick() {
+        const elapsedSecs = (performance.now() - startTime) / 1000;
+        if (elapsedSecs >= totalSecs) { endSession(); return; }
+
+        // Total progress
+        totalBar.style.width = (elapsedSecs / totalSecs * 100) + '%';
+        elapsedEl.textContent = formatTime(elapsedSecs);
+
+        // Cycle math
+        const cycleTime   = elapsedSecs % CYCLE;
+        const phaseIndex  = Math.floor(cycleTime / BEAT);
+        const phaseTime   = cycleTime - phaseIndex * BEAT;
+        const phaseFrac   = phaseTime / BEAT;
+        const currentCount= BEAT - Math.floor(phaseTime);
+        const cycleNum    = Math.floor(elapsedSecs / CYCLE) + 1;
+
+        const p = phases[phaseIndex];
+
+        // Center text
+        phaseText.textContent = p.name;
+        phaseText.style.color = p.hex;
+        countText.textContent = currentCount;
+        countText.style.color = p.hex;
+        guideText.textContent = p.guide;
+        guideText.style.color = p.hex + 'bb';
+        cycleText.textContent = `Cycle ${cycleNum}`;
+        totalBar.style.background = p.hex;
+
+        // Cycle progress ring
+        progressArc.style.strokeDashoffset = RING_CIRC * (1 - cycleTime / CYCLE);
+        progressArc.setAttribute('stroke', p.hex);
+
+        // Nostril animation
+        applyNostrilState(phaseIndex, phaseFrac);
+
+        // Sounds
+        if (phaseIndex !== lastPhase) {
+          playPhaseChange(p.freq);
+          lastPhase = phaseIndex;
+        }
+        if (currentCount !== lastCount) {
+          if (lastCount !== -1) playTick();
+          lastCount = currentCount;
+        }
+
+        animFrame = requestAnimationFrame(tick);
+      }
+
+      animFrame = requestAnimationFrame(tick);
+    }
+
+    function endSession() {
+      running = false;
+      cancelAnimationFrame(animFrame);
+      playGong();
+      setTimeout(playGong, 1500);
+      setTimeout(playGong, 3000);
+
+      phaseText.textContent = 'Complete';
+      phaseText.style.color = 'var(--exhale)';
+      countText.textContent = '🙏';
+      guideText.textContent = '';
+      cycleText.textContent = `${selectedMinutes} minutes`;
+      totalBar.style.width = '100%';
+      startBtn.textContent = 'Begin';
+      optionsEl.style.opacity = '1';
+      optionsEl.style.pointerEvents = 'auto';
+      progressArc.style.strokeDashoffset = 0;
+      resetNostrilState();
+    }
+
+    function stopSession() {
+      running = false;
+      cancelAnimationFrame(animFrame);
+
+      phaseText.textContent = 'Ready';
+      phaseText.style.color = 'var(--text)';
+      countText.textContent = '4';
+      countText.style.color = 'var(--text)';
+      guideText.textContent = 'Nadi Sodhana';
+      guideText.style.color = 'var(--dim)';
+      cycleText.textContent = '';
+      startBtn.textContent = 'Begin';
+      optionsEl.style.opacity = '1';
+      optionsEl.style.pointerEvents = 'auto';
+      totalBarWrap.classList.add('hidden');
+      totalBar.style.width = '0%';
+      progressArc.style.strokeDashoffset = RING_CIRC;
+      resetNostrilState();
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (running) stopSession();
+      else startSession();
+    });
+  </script>
+</body>
+</html>
