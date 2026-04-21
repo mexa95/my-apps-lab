@@ -369,6 +369,25 @@
     .dot-flow-down:nth-child(2) { animation-delay: 0.47s; }
     .dot-flow-down:nth-child(3) { animation-delay: 0.94s; }
 
+    /* Phase timing stepper (box breathing only) */
+    .timing-wrap { text-align: center; width: 100%; }
+    .timing-lbl { font-size: 0.72rem; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+    .timing-grid { display: flex; gap: 6px; justify-content: center; }
+    .timing-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .timing-name { font-size: 0.63rem; letter-spacing: 1px; text-transform: uppercase; }
+    .stepper { display: flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 8px; padding: 3px 5px; background: var(--surface); }
+    .step-btn { appearance: none; border: none; background: transparent; color: var(--dim); font-size: 1.1rem; line-height: 1; width: 22px; height: 22px; cursor: pointer; border-radius: 4px; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+    .step-btn:hover:not(:disabled) { color: var(--inhale); background: rgba(91,164,217,0.1); }
+    .step-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .step-val { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--text); min-width: 22px; text-align: center; }
+
+    /* 4-7-8 breathing orb */
+    #breathOrb, #orbHalo {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 0.35s ease-out;
+    }
+
     @media (max-width: 400px) {
       .box-wrap { width: 220px; height: 220px; }
       .count-text { font-size: 3.5rem; }
@@ -385,6 +404,29 @@
     <div class="tech-row">
       <button class="tech-btn selected" data-tech="box">Box Breathing</button>
       <button class="tech-btn" data-tech="nadi">Nadi Sodhana</button>
+      <button class="tech-btn" data-tech="478">4 · 7 · 8</button>
+    </div>
+
+    <div class="timing-wrap" id="timingWrap">
+      <div class="timing-lbl">Phase Timing — seconds</div>
+      <div class="timing-grid">
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--inhale)">Inhale</div>
+          <div class="stepper"><button class="step-btn" id="dec0">−</button><span class="step-val" id="tv0">4</span><button class="step-btn" id="inc0">+</button></div>
+        </div>
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--hold)">Hold</div>
+          <div class="stepper"><button class="step-btn" id="dec1">−</button><span class="step-val" id="tv1">4</span><button class="step-btn" id="inc1">+</button></div>
+        </div>
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--exhale)">Exhale</div>
+          <div class="stepper"><button class="step-btn" id="dec2">−</button><span class="step-val" id="tv2">4</span><button class="step-btn" id="inc2">+</button></div>
+        </div>
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--hold2)">Hold</div>
+          <div class="stepper"><button class="step-btn" id="dec3">−</button><span class="step-val" id="tv3">4</span><button class="step-btn" id="inc3">+</button></div>
+        </div>
+      </div>
     </div>
 
     <div class="box-wrap" id="boxWrap">
@@ -487,6 +529,27 @@
         </g>
       </svg>
 
+      <!-- 4-7-8 breathing orb SVG (hidden by default) -->
+      <svg class="box-svg hidden" id="orbSvg" viewBox="0 0 260 260">
+        <defs>
+          <filter id="orbGF" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="10" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="orbRF" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <circle cx="130" cy="130" r="122" fill="none" stroke="#1c2028" stroke-width="1.5"/>
+        <circle id="orbProgressArc" cx="130" cy="130" r="122" fill="none"
+          stroke="var(--inhale)" stroke-width="3" stroke-linecap="round"
+          stroke-dasharray="767" stroke-dashoffset="767"
+          transform="rotate(-90 130 130)" filter="url(#orbRF)"/>
+        <circle id="orbHalo" cx="130" cy="130" r="68" fill="#5ba4d910" stroke="none" filter="url(#orbGF)"/>
+        <circle id="breathOrb" cx="130" cy="130" r="68" fill="#5ba4d918" stroke="#5ba4d9" stroke-width="1.5"/>
+      </svg>
+
       <div class="box-center">
         <div class="breath-circle" id="breathCircle"></div>
         <div class="phase-text" id="phaseText">Ready</div>
@@ -573,22 +636,27 @@
 
     // ── Phase data ─────────────────────────────────────────────────────────
     const boxPhases = [
-      { name: 'Inhale', hex: '#5ba4d9', freq: 396 },
-      { name: 'Hold',   hex: '#a78bfa', freq: 528 },
-      { name: 'Exhale', hex: '#5bd9a4', freq: 432 },
-      { name: 'Hold',   hex: '#d9a45b', freq: 480 },
+      { name: 'Inhale', hex: '#5ba4d9', freq: 396, dur: 4 },
+      { name: 'Hold',   hex: '#a78bfa', freq: 528, dur: 4 },
+      { name: 'Exhale', hex: '#5bd9a4', freq: 432, dur: 4 },
+      { name: 'Hold',   hex: '#d9a45b', freq: 480, dur: 4 },
     ];
     // Nadi Sodhana: inhale-left → hold → exhale-right → inhale-right → hold → exhale-left
     const nadiPhases = [
-      { name: 'Inhale', guide: 'Left nostril',  hex: '#5ba4d9', open: 'left',  flow: 'in',  freq: 396 },
-      { name: 'Hold',   guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,  freq: 528 },
-      { name: 'Exhale', guide: 'Right nostril', hex: '#5bd9a4', open: 'right', flow: 'out', freq: 432 },
-      { name: 'Inhale', guide: 'Right nostril', hex: '#5ba4d9', open: 'right', flow: 'in',  freq: 396 },
-      { name: 'Hold',   guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,  freq: 528 },
-      { name: 'Exhale', guide: 'Left nostril',  hex: '#5bd9a4', open: 'left',  flow: 'out', freq: 432 },
+      { name: 'Inhale', guide: 'Left nostril',  hex: '#5ba4d9', open: 'left',  flow: 'in',  freq: 396, dur: 4 },
+      { name: 'Hold',   guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,  freq: 528, dur: 4 },
+      { name: 'Exhale', guide: 'Right nostril', hex: '#5bd9a4', open: 'right', flow: 'out', freq: 432, dur: 4 },
+      { name: 'Inhale', guide: 'Right nostril', hex: '#5ba4d9', open: 'right', flow: 'in',  freq: 396, dur: 4 },
+      { name: 'Hold',   guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,  freq: 528, dur: 4 },
+      { name: 'Exhale', guide: 'Left nostril',  hex: '#5bd9a4', open: 'left',  flow: 'out', freq: 432, dur: 4 },
     ];
-    const BEAT = 4;
-    const RING_CIRC = 2 * Math.PI * 122; // ~767 — matches r=122 in nostril SVG
+    // 4-7-8: inhale 4s → hold 7s → exhale 8s
+    const breathPhases = [
+      { name: 'Inhale', hex: '#5ba4d9', freq: 396, dur: 4 },
+      { name: 'Hold',   hex: '#a78bfa', freq: 528, dur: 7 },
+      { name: 'Exhale', hex: '#5bd9a4', freq: 432, dur: 8 },
+    ];
+    const RING_CIRC = 2 * Math.PI * 122; // ~767
 
     // ── Box path geometry ──────────────────────────────────────────────────
     const sides = [
@@ -630,11 +698,18 @@
     const leftFlowOut  = document.getElementById('leftFlowOut');
     const rightFlowIn  = document.getElementById('rightFlowIn');
     const rightFlowOut = document.getElementById('rightFlowOut');
+    const timingWrap   = document.getElementById('timingWrap');
+    const orbSvg       = document.getElementById('orbSvg');
+    const orbProgressArc = document.getElementById('orbProgressArc');
+    const breathOrb    = document.getElementById('breathOrb');
+    const orbHalo      = document.getElementById('orbHalo');
 
     let selectedMinutes = 5;
     let running = false;
     let animFrame = null;
     let currentTech = 'box';
+    const boxTimings = [4, 4, 4, 4]; // inhale, hold, exhale, hold — user-adjustable
+    const MIN_DUR = 2, MAX_DUR = 12;
 
     // ── Duration buttons ───────────────────────────────────────────────────
     document.querySelectorAll('.dur-btn').forEach(btn => {
@@ -643,6 +718,30 @@
         document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         selectedMinutes = parseInt(btn.dataset.min);
+      });
+    });
+
+    // ── Box timing steppers ────────────────────────────────────────────────
+    function updateBoxSubtitle() {
+      subtitleEl.textContent = `Box Breathing — ${boxTimings.join(' · ')}`;
+    }
+
+    [0, 1, 2, 3].forEach(i => {
+      document.getElementById(`dec${i}`).addEventListener('click', () => {
+        if (running || boxTimings[i] <= MIN_DUR) return;
+        boxTimings[i]--;
+        document.getElementById(`tv${i}`).textContent = boxTimings[i];
+        document.getElementById(`dec${i}`).disabled = boxTimings[i] <= MIN_DUR;
+        document.getElementById(`inc${i}`).disabled = false;
+        updateBoxSubtitle();
+      });
+      document.getElementById(`inc${i}`).addEventListener('click', () => {
+        if (running || boxTimings[i] >= MAX_DUR) return;
+        boxTimings[i]++;
+        document.getElementById(`tv${i}`).textContent = boxTimings[i];
+        document.getElementById(`inc${i}`).disabled = boxTimings[i] >= MAX_DUR;
+        document.getElementById(`dec${i}`).disabled = false;
+        updateBoxSubtitle();
       });
     });
 
@@ -658,28 +757,39 @@
       currentTech = tech;
       document.querySelectorAll('.tech-btn').forEach(b =>
         b.classList.toggle('selected', b.dataset.tech === tech));
+
+      // Reset all SVGs and modes
+      boxSvg.classList.add('hidden');
+      noseSvg.classList.add('hidden');
+      orbSvg.classList.add('hidden');
+      boxWrap.classList.remove('nadi-mode');
+      breathCircle.style.display = 'none';
+      guideText.classList.add('hidden');
+      legendHold2.classList.add('hidden');
+      timingWrap.classList.add('hidden');
+
       if (tech === 'box') {
         boxSvg.classList.remove('hidden');
-        noseSvg.classList.add('hidden');
-        boxWrap.classList.remove('nadi-mode');
-        subtitleEl.textContent = 'Box Breathing — 4 · 4 · 4 · 4';
+        updateBoxSubtitle();
         legendHold2.classList.remove('hidden');
         breathCircle.style.display = '';
-        guideText.classList.add('hidden');
+        timingWrap.classList.remove('hidden');
         resetBoxVisual();
-      } else {
-        boxSvg.classList.add('hidden');
+      } else if (tech === 'nadi') {
         noseSvg.classList.remove('hidden');
         boxWrap.classList.add('nadi-mode');
         subtitleEl.textContent = 'Nadi Sodhana — Alternate Nostril';
-        legendHold2.classList.add('hidden');
-        breathCircle.style.display = 'none';
         guideText.classList.remove('hidden');
         resetNadiVisual();
+      } else {
+        orbSvg.classList.remove('hidden');
+        subtitleEl.textContent = '4 · 7 · 8 Breathing';
+        resetOrbVisual();
       }
+
       phaseText.textContent = 'Ready';
       phaseText.style.color = 'var(--text)';
-      countText.textContent = '4';
+      countText.textContent = '—';
       countText.style.color = 'var(--text)';
       guideText.textContent = '';
       cycleText.textContent = '';
@@ -751,6 +861,30 @@
       progressArc.style.strokeDashoffset = RING_CIRC;
     }
 
+    // ── 4-7-8 orb visual ──────────────────────────────────────────────────
+    function applyOrbState(p, phaseFrac, cycleTime, CYCLE) {
+      const minS = 0.38, maxS = 1.28;
+      const scale = p.name === 'Inhale' ? minS + phaseFrac * (maxS - minS)
+                  : p.name === 'Hold'   ? maxS
+                  : maxS - phaseFrac * (maxS - minS);
+      breathOrb.style.transform = `scale(${scale})`;
+      breathOrb.setAttribute('fill', p.hex + '1e');
+      breathOrb.setAttribute('stroke', p.hex);
+      orbHalo.style.transform = `scale(${scale * 1.4})`;
+      orbHalo.setAttribute('fill', p.hex + '0c');
+      orbProgressArc.style.strokeDashoffset = RING_CIRC * (1 - cycleTime / CYCLE);
+      orbProgressArc.setAttribute('stroke', p.hex);
+    }
+    function resetOrbVisual() {
+      breathOrb.style.transform = '';
+      orbHalo.style.transform = '';
+      breathOrb.setAttribute('fill', '#5ba4d918');
+      breathOrb.setAttribute('stroke', '#5ba4d9');
+      orbHalo.setAttribute('fill', '#5ba4d910');
+      orbProgressArc.style.strokeDashoffset = RING_CIRC;
+      orbProgressArc.setAttribute('stroke', 'var(--inhale)');
+    }
+
     // ── Shared helpers ─────────────────────────────────────────────────────
     function formatTime(secs) {
       const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
@@ -763,10 +897,20 @@
       startBtn.textContent = 'Stop';
       optionsEl.style.opacity = '0.3';
       optionsEl.style.pointerEvents = 'none';
+      timingWrap.style.opacity = '0.3';
+      timingWrap.style.pointerEvents = 'none';
       totalBarWrap.classList.remove('hidden');
 
-      const phases = currentTech === 'box' ? boxPhases : nadiPhases;
-      const CYCLE  = BEAT * phases.length;
+      const phases = currentTech === 'box'
+        ? boxPhases.map((p, i) => ({ ...p, dur: boxTimings[i] }))
+        : currentTech === 'nadi' ? nadiPhases : breathPhases;
+
+      // Pre-compute cumulative phase start times for variable-duration support
+      const cumStarts = [];
+      let acc = 0;
+      phases.forEach(p => { cumStarts.push(acc); acc += p.dur; });
+      const CYCLE = acc;
+
       const totalSecs = selectedMinutes * 60;
       totalTimeEl.textContent = formatTime(totalSecs);
       const startTime = performance.now();
@@ -781,11 +925,15 @@
         totalBar.style.width = (elapsedSecs / totalSecs * 100) + '%';
         elapsedEl.textContent = formatTime(elapsedSecs);
 
-        const cycleTime    = elapsedSecs % CYCLE;
-        const phaseIndex   = Math.floor(cycleTime / BEAT);
-        const phaseTime    = cycleTime - phaseIndex * BEAT;
-        const phaseFrac    = phaseTime / BEAT;
-        const currentCount = BEAT - Math.floor(phaseTime);
+        const cycleTime = elapsedSecs % CYCLE;
+        let phaseIndex = phases.length - 1;
+        for (let i = 0; i < phases.length - 1; i++) {
+          if (cycleTime < cumStarts[i + 1]) { phaseIndex = i; break; }
+        }
+        const phaseTime    = cycleTime - cumStarts[phaseIndex];
+        const phaseDur     = phases[phaseIndex].dur;
+        const phaseFrac    = phaseTime / phaseDur;
+        const currentCount = phaseDur - Math.floor(phaseTime);
         const cycleNum     = Math.floor(elapsedSecs / CYCLE) + 1;
         const p            = phases[phaseIndex];
 
@@ -804,12 +952,14 @@
           boxPath.setAttribute('stroke', p.hex);
           setDotPosition(phaseIndex, phaseFrac);
           setBoxProgress(phaseIndex, phaseFrac);
-        } else {
+        } else if (currentTech === 'nadi') {
           guideText.textContent = p.guide;
           guideText.style.color = p.hex + 'bb';
           applyNostrilState(p, phaseFrac);
           progressArc.style.strokeDashoffset = RING_CIRC * (1 - cycleTime / CYCLE);
           progressArc.setAttribute('stroke', p.hex);
+        } else {
+          applyOrbState(p, phaseFrac, cycleTime, CYCLE);
         }
 
         if (phaseIndex !== lastPhase) { playPhaseChange(p.freq); lastPhase = phaseIndex; }
@@ -831,10 +981,11 @@
       cycleText.textContent = `${selectedMinutes} minutes`;
       totalBar.style.width = '100%';
       startBtn.textContent = 'Begin';
-      optionsEl.style.opacity = '1';
-      optionsEl.style.pointerEvents = 'auto';
-      if (currentTech === 'box') { resetBoxVisual(); }
-      else { progressArc.style.strokeDashoffset = 0; resetNadiVisual(); }
+      optionsEl.style.opacity = '1'; optionsEl.style.pointerEvents = 'auto';
+      timingWrap.style.opacity = ''; timingWrap.style.pointerEvents = '';
+      if (currentTech === 'box') resetBoxVisual();
+      else if (currentTech === 'nadi') { progressArc.style.strokeDashoffset = 0; resetNadiVisual(); }
+      else { orbProgressArc.style.strokeDashoffset = 0; resetOrbVisual(); }
     }
 
     function stopSession() {
@@ -842,17 +993,18 @@
       cancelAnimationFrame(animFrame);
       phaseText.textContent = 'Ready';
       phaseText.style.color = 'var(--text)';
-      countText.textContent = '4';
+      countText.textContent = '—';
       countText.style.color = 'var(--text)';
       guideText.textContent = '';
       cycleText.textContent = '';
       startBtn.textContent = 'Begin';
-      optionsEl.style.opacity = '1';
-      optionsEl.style.pointerEvents = 'auto';
+      optionsEl.style.opacity = '1'; optionsEl.style.pointerEvents = 'auto';
+      timingWrap.style.opacity = ''; timingWrap.style.pointerEvents = '';
       totalBarWrap.classList.add('hidden');
       totalBar.style.width = '0%';
-      if (currentTech === 'box') { resetBoxVisual(); }
-      else { resetNadiVisual(); }
+      if (currentTech === 'box') resetBoxVisual();
+      else if (currentTech === 'nadi') resetNadiVisual();
+      else resetOrbVisual();
     }
 
     startBtn.addEventListener('click', () => {
