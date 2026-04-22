@@ -675,7 +675,25 @@
       });
     }
 
-    // ── Phase data ─────────────────────────────────────────────────────────
+    function playWhoosh() {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime, dur = 0.28;
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(350, t);
+      filt.frequency.exponentialRampToValueAtTime(2800, t + 0.18);
+      filt.Q.value = 0.7;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.22, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+      src.start(t); src.stop(t + dur);
+    }
     const boxPhases = [
       { name: 'Inhale', hex: '#5ba4d9', freq: 396, dur: 4 },
       { name: 'Hold',   hex: '#a78bfa', freq: 528, dur: 4 },
@@ -1129,33 +1147,38 @@
 
       const TOTAL_ROUNDS = 3;
       const BREATH_COUNT = 30;
-      const BREATH_DUR   = 2;    // seconds per breath
-      const HOLD_DUR     = 90;   // breath retention seconds
-      const RECOV_DUR    = 15;   // recovery hold seconds
+      const BREATH_DUR   = 1.5;  // seconds per breath (faster than before)
+      const HOLD_DUR     = 90;
+      const RECOV_DUR    = 15;
 
       let round = 1;
-      let subPhase = 'breathe'; // 'breathe' | 'hold' | 'recover'
+      let subPhase = 'breathe';
       let subStart = performance.now();
+      let lastBreathNum = 0;
       const totalSecs = TOTAL_ROUNDS * (BREATH_COUNT * BREATH_DUR + HOLD_DUR + RECOV_DUR);
       const globalStart = performance.now();
 
       totalTimeEl.textContent = formatTime(totalSecs);
       playGong();
-      playVoice('inhale');
 
       function wimTick() {
         if (!running) return;
         const now = performance.now();
-        const elapsed = (now - globalStart) / 1000;
+        const elapsed    = (now - globalStart) / 1000;
         const subElapsed = (now - subStart) / 1000;
 
         totalBar.style.width = Math.min(elapsed / totalSecs * 100, 100) + '%';
         elapsedEl.textContent = formatTime(elapsed);
 
         if (subPhase === 'breathe') {
-          const breathNum = Math.min(Math.floor(subElapsed / BREATH_DUR) + 1, BREATH_COUNT);
-          const breathFrac = (subElapsed % BREATH_DUR) / BREATH_DUR;
-          const isIn = breathFrac < 0.5;
+          const breathNum  = Math.min(Math.floor(subElapsed / BREATH_DUR) + 1, BREATH_COUNT);
+          const breathFrac = (subElapsed % BREATH_DUR) / BREATH_DUR; // 0→1 per breath
+          const isIn       = breathFrac < 0.5;
+          const t          = isIn ? breathFrac * 2 : (breathFrac - 0.5) * 2; // 0→1 per half
+          // sine easing: fast expand on inhale, fast collapse on exhale
+          const s = isIn
+            ? 0.22 + 1.25 * Math.sin(t * Math.PI / 2)   // 0.22 → 1.47 easeOut
+            : 0.22 + 1.25 * Math.cos(t * Math.PI / 2);  // 1.47 → 0.22 easeIn
           const hex = isIn ? '#5ba4d9' : '#5bd9a4';
           phaseText.textContent = isIn ? 'Inhale' : 'Exhale';
           phaseText.style.color = hex;
@@ -1163,48 +1186,55 @@
           countText.style.color = hex;
           roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Breath ${breathNum} / ${BREATH_COUNT}`;
           totalBar.style.background = hex;
-          const s = isIn ? 0.55 + breathFrac * 2 * 0.7 : 1.25 - (breathFrac - 0.5) * 2 * 0.7;
           breathOrb.style.transform = `scale(${s})`;
-          breathOrb.setAttribute('fill', hex + '1e'); breathOrb.setAttribute('stroke', hex);
-          orbHalo.style.transform = `scale(${s * 1.3})`;
+          breathOrb.setAttribute('fill', hex + '22'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${s * 1.35})`;
+          orbHalo.setAttribute('fill', hex + '0e');
+          if (breathNum !== lastBreathNum) {
+            playWhoosh();
+            lastBreathNum = breathNum;
+          }
           if (subElapsed >= BREATH_COUNT * BREATH_DUR) {
             subPhase = 'hold'; subStart = performance.now();
-            playPhaseChange(528); playVoice('hold');
+            playPhaseChange(528);
           }
         } else if (subPhase === 'hold') {
-          const holdSecs = Math.floor(subElapsed);
-          const hex = '#a78bfa';
+          const hex   = '#a78bfa';
+          const pulse = 0.32 + 0.06 * Math.sin(subElapsed * Math.PI * 0.35); // slow eerie pulse
           phaseText.textContent = 'Hold';
           phaseText.style.color = hex;
-          countText.textContent = holdSecs;
+          countText.textContent = Math.floor(subElapsed);
           countText.style.color = hex;
           roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Retention`;
           totalBar.style.background = hex;
-          breathOrb.style.transform = 'scale(0.4)';
-          breathOrb.setAttribute('fill', hex + '1e'); breathOrb.setAttribute('stroke', hex);
-          orbHalo.style.transform = 'scale(0.5)';
+          breathOrb.style.transform = `scale(${pulse})`;
+          breathOrb.setAttribute('fill', hex + '22'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${pulse * 1.35})`;
+          orbHalo.setAttribute('fill', hex + '0e');
           if (subElapsed >= HOLD_DUR) {
             subPhase = 'recover'; subStart = performance.now();
-            playPhaseChange(396); playVoice('inhale');
+            playPhaseChange(396);
           }
         } else {
-          const remaining = Math.max(Math.ceil(RECOV_DUR - subElapsed), 1);
-          const hex = '#5bd9a4';
+          const hex      = '#5bd9a4';
+          const recovFrac = Math.min(subElapsed / RECOV_DUR, 1);
+          const s        = 0.28 + 1.15 * Math.sin(recovFrac * Math.PI / 2); // 0.28 → 1.43 easeOut
           phaseText.textContent = 'Inhale & Hold';
           phaseText.style.color = hex;
-          countText.textContent = remaining;
+          countText.textContent = Math.max(Math.ceil(RECOV_DUR - subElapsed), 1);
           countText.style.color = hex;
           roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Recovery`;
           totalBar.style.background = hex;
-          const s = 0.7 + (RECOV_DUR - subElapsed) / RECOV_DUR * 0.55;
-          breathOrb.style.transform = `scale(${Math.max(s, 0.7)})`;
-          breathOrb.setAttribute('fill', hex + '1e'); breathOrb.setAttribute('stroke', hex);
-          orbHalo.style.transform = `scale(${Math.max(s * 1.3, 0.9)})`;
+          breathOrb.style.transform = `scale(${s})`;
+          breathOrb.setAttribute('fill', hex + '22'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${s * 1.35})`;
+          orbHalo.setAttribute('fill', hex + '0e');
           if (subElapsed >= RECOV_DUR) {
             if (round >= TOTAL_ROUNDS) { endSession(); return; }
             round++;
             subPhase = 'breathe'; subStart = performance.now();
-            playPhaseChange(396); playVoice('inhale');
+            lastBreathNum = 0;
+            playPhaseChange(396);
           }
         }
         animFrame = requestAnimationFrame(wimTick);
