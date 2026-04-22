@@ -726,11 +726,7 @@
     }
 
     // ── Voice guidance (Web Audio API — works on iOS) ─────────────────────
-    const VOICE_KEY_MAP = {
-      'inhale': 'inhale', 'exhale': 'exhale', 'hold': 'hold',
-      'left nostril': 'inhale', 'right nostril': 'exhale',
-      'both closed': 'hold', 'inhale & hold': 'hold',
-    };
+    const VOICE_KEY_MAP = { 'inhale': 'inhale', 'exhale': 'exhale', 'hold': 'hold' };
     let voiceCtx = null;
     const voiceBuffers = {};
 
@@ -997,7 +993,7 @@
     }
 
     // ── Session ────────────────────────────────────────────────────────────
-    function startSession() {
+    async function startSession() {
       running = true;
       startBtn.textContent = 'Stop';
       optionsEl.style.opacity = '0.3';
@@ -1006,7 +1002,7 @@
       timingWrap.style.pointerEvents = 'none';
       totalBarWrap.classList.remove('hidden');
 
-      if (document.getElementById('voiceToggle').checked) initVoiceAudio();
+      if (document.getElementById('voiceToggle').checked) await initVoiceAudio();
       if (currentTech === 'wimhof') { startWimhof(); return; }
 
       const phases = currentTech === 'box'
@@ -1074,7 +1070,7 @@
 
         if (phaseIndex !== lastPhase) {
           playPhaseChange(p.freq);
-          playVoice(p.guide || p.name);
+          playVoice(p.name);
           lastPhase = phaseIndex;
         }
         if (currentCount !== lastCount) { if (lastCount !== -1) playTick(); lastCount = currentCount; }
