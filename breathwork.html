@@ -777,8 +777,50 @@
       if (!voiceBuffers[key]) return;
       const src = voiceCtx.createBufferSource();
       src.buffer = voiceBuffers[key];
-      src.connect(voiceCtx.destination);
+      const vol = voiceCtx.createGain();
+      vol.gain.value = 0.62;
+      src.connect(vol); vol.connect(voiceCtx.destination);
       src.start(0);
+    }
+
+    // ── Nadi background music ─────────────────────────────────────────────
+    let nadiMusicNodes = null;
+
+    function startNadiMusic() {
+      const ctx = getCtx(), t = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0, t);
+      master.gain.linearRampToValueAtTime(0.07, t + 4); // 4s fade in
+      master.connect(ctx.destination);
+      // Layered drone: 108Hz fundamental + octaves + fifth, with 216/217 beating
+      [
+        { f: 108,  vol: 0.60, lfoRate: 0.11 },
+        { f: 216,  vol: 0.38, lfoRate: 0.17 },
+        { f: 217,  vol: 0.28, lfoRate: 0.19 }, // 1Hz beat against 216
+        { f: 324,  vol: 0.22, lfoRate: 0.23 }, // perfect fifth
+        { f: 432,  vol: 0.18, lfoRate: 0.29 }, // second octave
+      ].forEach(({ f, vol, lfoRate }) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        const lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = f; g.gain.value = vol;
+        lfo.frequency.value = lfoRate; lfoG.gain.value = f * 0.0018;
+        lfo.connect(lfoG); lfoG.connect(osc.frequency);
+        osc.connect(g); g.connect(master);
+        lfo.start(t); osc.start(t);
+        master._nodes = master._nodes || [];
+        master._nodes.push(osc, lfo);
+      });
+      nadiMusicNodes = master;
+    }
+
+    function stopNadiMusic() {
+      if (!nadiMusicNodes) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      nadiMusicNodes.gain.setValueAtTime(nadiMusicNodes.gain.value, t);
+      nadiMusicNodes.gain.linearRampToValueAtTime(0, t + 2.5);
+      const nodes = nadiMusicNodes._nodes || [];
+      setTimeout(() => nodes.forEach(n => { try { n.stop(); } catch {} }), 3000);
+      nadiMusicNodes = null;
     }
 
     // ── Box path geometry ──────────────────────────────────────────────────
@@ -1050,6 +1092,7 @@
       const startTime = performance.now();
       let lastCount = -1, lastPhase = -1;
 
+      if (currentTech === 'nadi') startNadiMusic();
       playGong();
 
       function tick() {
@@ -1118,6 +1161,7 @@
     function endSession() {
       running = false;
       cancelAnimationFrame(animFrame);
+      if (currentTech === 'nadi') stopNadiMusic();
       incrementSession();
       playGong(); setTimeout(playGong, 1500); setTimeout(playGong, 3000);
       phaseText.textContent = 'Complete';
@@ -1138,6 +1182,7 @@
     function stopSession() {
       running = false;
       cancelAnimationFrame(animFrame);
+      if (currentTech === 'nadi') stopNadiMusic();
       phaseText.textContent = 'Ready';
       phaseText.style.color = 'var(--text)';
       countText.textContent = '—';
