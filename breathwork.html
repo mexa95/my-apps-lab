@@ -388,6 +388,24 @@
       transition: transform 0.35s ease-out;
     }
 
+    /* Stats widget */
+    .stats-widget { display: flex; gap: 24px; padding: 10px 24px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .stat-item { text-align: center; }
+    .stat-val { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--inhale); line-height: 1; }
+    .stat-lbl { font-size: 0.6rem; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+    /* Safety modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+    .modal-overlay.open { display: flex; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; max-width: 340px; text-align: center; }
+    .modal-box h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; font-weight: 400; color: #f59e0b; margin-bottom: 12px; }
+    .modal-box p { font-size: 0.8rem; color: var(--dim); line-height: 1.7; margin-bottom: 20px; }
+    .modal-ok { appearance: none; border: 1px solid var(--inhale); background: transparent; color: var(--inhale); font-family: 'DM Sans', sans-serif; font-size: 0.85rem; padding: 10px 32px; border-radius: 50px; cursor: pointer; }
+    .modal-cancel { appearance: none; border: none; background: transparent; color: var(--dim); font-size: 0.78rem; cursor: pointer; margin-left: 16px; }
+
+    /* Round indicator */
+    .round-text { font-size: 0.68rem; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; min-height: 16px; }
+
     @media (max-width: 400px) {
       .box-wrap { width: 220px; height: 220px; }
       .count-text { font-size: 3.5rem; }
@@ -405,6 +423,8 @@
       <button class="tech-btn selected" data-tech="box">Box Breathing</button>
       <button class="tech-btn" data-tech="nadi">Nadi Sodhana</button>
       <button class="tech-btn" data-tech="478">4 · 7 · 8</button>
+      <button class="tech-btn" data-tech="wimhof">Wim Hof</button>
+      <button class="tech-btn" data-tech="holo">Holotropic</button>
     </div>
 
     <div class="timing-wrap" id="timingWrap">
@@ -556,6 +576,7 @@
         <div class="count-text" id="countText">4</div>
         <div class="guide-text hidden" id="guideText"></div>
         <div class="cycle-text" id="cycleText"></div>
+        <div class="round-text hidden" id="roundText"></div>
       </div>
     </div>
 
@@ -593,7 +614,27 @@
       <div class="toggle-track"></div>
     </label>
 
+    <label class="toggle-row">
+      <span>Voice guide</span>
+      <input type="checkbox" id="voiceToggle">
+      <div class="toggle-track"></div>
+    </label>
+
+    <div class="stats-widget">
+      <div class="stat-item"><div class="stat-val" id="statSessions">0</div><div class="stat-lbl">Sessions</div></div>
+      <div class="stat-item"><div class="stat-val" id="statStreak">0</div><div class="stat-lbl">Day streak 🔥</div></div>
+    </div>
+
     <button class="start-btn" id="startBtn">Begin</button>
+  </div>
+
+  <div class="modal-overlay" id="safetyModal">
+    <div class="modal-box">
+      <h3>⚠ Safety Notice</h3>
+      <p id="safetyText"></p>
+      <button class="modal-ok" id="modalOk">I understand</button>
+      <button class="modal-cancel" id="modalCancel">Go back</button>
+    </div>
   </div>
 
   <script>
@@ -656,7 +697,43 @@
       { name: 'Hold',   hex: '#a78bfa', freq: 528, dur: 7 },
       { name: 'Exhale', hex: '#5bd9a4', freq: 432, dur: 8 },
     ];
+    const holoPhases = [
+      { name: 'Inhale', hex: '#5ba4d9', freq: 396, dur: 3 },
+      { name: 'Exhale', hex: '#5bd9a4', freq: 432, dur: 3 },
+    ];
     const RING_CIRC = 2 * Math.PI * 122; // ~767
+
+    // ── localStorage stats ─────────────────────────────────────────────────
+    function loadStats() {
+      try { return JSON.parse(localStorage.getItem('pranayama_stats') || '{}'); } catch { return {}; }
+    }
+    function saveStats(s) { try { localStorage.setItem('pranayama_stats', JSON.stringify(s)); } catch {} }
+    function renderStats() {
+      const s = loadStats();
+      document.getElementById('statSessions').textContent = s.sessions || 0;
+      document.getElementById('statStreak').textContent = s.streak || 0;
+    }
+    function incrementSession() {
+      const s = loadStats();
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      s.sessions = (s.sessions || 0) + 1;
+      s.streak = s.lastDate === today ? (s.streak || 1)
+               : s.lastDate === yesterday ? (s.streak || 0) + 1 : 1;
+      s.lastDate = today;
+      saveStats(s);
+      renderStats();
+    }
+
+    // ── Voice guidance ─────────────────────────────────────────────────────
+    function speakPhase(text) {
+      if (!document.getElementById('voiceToggle').checked) return;
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.85; u.volume = 0.9;
+      window.speechSynthesis.speak(u);
+    }
 
     // ── Box path geometry ──────────────────────────────────────────────────
     const sides = [
@@ -703,6 +780,9 @@
     const orbProgressArc = document.getElementById('orbProgressArc');
     const breathOrb    = document.getElementById('breathOrb');
     const orbHalo      = document.getElementById('orbHalo');
+    const roundText    = document.getElementById('roundText');
+    const safetyModal  = document.getElementById('safetyModal');
+    const safetyText   = document.getElementById('safetyText');
 
     let selectedMinutes = 5;
     let running = false;
@@ -745,14 +825,6 @@
       });
     });
 
-    // ── Technique switcher ─────────────────────────────────────────────────
-    document.querySelectorAll('.tech-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (running) return;
-        switchTechnique(btn.dataset.tech);
-      });
-    });
-
     function switchTechnique(tech) {
       currentTech = tech;
       document.querySelectorAll('.tech-btn').forEach(b =>
@@ -767,6 +839,8 @@
       guideText.classList.add('hidden');
       legendHold2.classList.add('hidden');
       timingWrap.classList.add('hidden');
+      roundText.classList.add('hidden');
+      roundText.textContent = '';
 
       if (tech === 'box') {
         boxSvg.classList.remove('hidden');
@@ -781,6 +855,15 @@
         subtitleEl.textContent = 'Nadi Sodhana — Alternate Nostril';
         guideText.classList.remove('hidden');
         resetNadiVisual();
+      } else if (tech === 'wimhof') {
+        orbSvg.classList.remove('hidden');
+        subtitleEl.textContent = 'Wim Hof — 3 Rounds';
+        roundText.classList.remove('hidden');
+        resetOrbVisual();
+      } else if (tech === 'holo') {
+        orbSvg.classList.remove('hidden');
+        subtitleEl.textContent = 'Holotropic — Circular Breathing';
+        resetOrbVisual();
       } else {
         orbSvg.classList.remove('hidden');
         subtitleEl.textContent = '4 · 7 · 8 Breathing';
@@ -901,9 +984,13 @@
       timingWrap.style.pointerEvents = 'none';
       totalBarWrap.classList.remove('hidden');
 
+      if (currentTech === 'wimhof') { startWimhof(); return; }
+
       const phases = currentTech === 'box'
         ? boxPhases.map((p, i) => ({ ...p, dur: boxTimings[i] }))
-        : currentTech === 'nadi' ? nadiPhases : breathPhases;
+        : currentTech === 'nadi' ? nadiPhases
+        : currentTech === 'holo' ? holoPhases
+        : breathPhases;
 
       // Pre-compute cumulative phase start times for variable-duration support
       const cumStarts = [];
@@ -962,7 +1049,11 @@
           applyOrbState(p, phaseFrac, cycleTime, CYCLE);
         }
 
-        if (phaseIndex !== lastPhase) { playPhaseChange(p.freq); lastPhase = phaseIndex; }
+        if (phaseIndex !== lastPhase) {
+          playPhaseChange(p.freq);
+          speakPhase(p.guide || p.name);
+          lastPhase = phaseIndex;
+        }
         if (currentCount !== lastCount) { if (lastCount !== -1) playTick(); lastCount = currentCount; }
 
         animFrame = requestAnimationFrame(tick);
@@ -973,6 +1064,7 @@
     function endSession() {
       running = false;
       cancelAnimationFrame(animFrame);
+      incrementSession();
       playGong(); setTimeout(playGong, 1500); setTimeout(playGong, 3000);
       phaseText.textContent = 'Complete';
       phaseText.style.color = 'var(--exhale)';
@@ -986,6 +1078,7 @@
       if (currentTech === 'box') resetBoxVisual();
       else if (currentTech === 'nadi') { progressArc.style.strokeDashoffset = 0; resetNadiVisual(); }
       else { orbProgressArc.style.strokeDashoffset = 0; resetOrbVisual(); }
+      if (currentTech === 'wimhof') { roundText.textContent = `${3} / 3 complete ✓`; }
     }
 
     function stopSession() {
@@ -1005,11 +1098,141 @@
       if (currentTech === 'box') resetBoxVisual();
       else if (currentTech === 'nadi') resetNadiVisual();
       else resetOrbVisual();
+      if (currentTech === 'wimhof') { roundText.textContent = ''; }
     }
+
+    // ── Wim Hof engine ────────────────────────────────────────────────────
+    function startWimhof() {
+      running = true;
+      startBtn.textContent = 'Stop';
+      optionsEl.style.opacity = '0.3'; optionsEl.style.pointerEvents = 'none';
+      totalBarWrap.classList.remove('hidden');
+
+      const TOTAL_ROUNDS = 3;
+      const BREATH_COUNT = 30;
+      const BREATH_DUR   = 2;    // seconds per breath
+      const HOLD_DUR     = 90;   // breath retention seconds
+      const RECOV_DUR    = 15;   // recovery hold seconds
+
+      let round = 1;
+      let subPhase = 'breathe'; // 'breathe' | 'hold' | 'recover'
+      let subStart = performance.now();
+      const totalSecs = TOTAL_ROUNDS * (BREATH_COUNT * BREATH_DUR + HOLD_DUR + RECOV_DUR);
+      const globalStart = performance.now();
+
+      totalTimeEl.textContent = formatTime(totalSecs);
+      playGong();
+
+      function wimTick() {
+        if (!running) return;
+        const now = performance.now();
+        const elapsed = (now - globalStart) / 1000;
+        const subElapsed = (now - subStart) / 1000;
+
+        totalBar.style.width = Math.min(elapsed / totalSecs * 100, 100) + '%';
+        elapsedEl.textContent = formatTime(elapsed);
+
+        if (subPhase === 'breathe') {
+          const breathNum = Math.min(Math.floor(subElapsed / BREATH_DUR) + 1, BREATH_COUNT);
+          const breathFrac = (subElapsed % BREATH_DUR) / BREATH_DUR;
+          const isIn = breathFrac < 0.5;
+          const hex = isIn ? '#5ba4d9' : '#5bd9a4';
+          phaseText.textContent = isIn ? 'Inhale' : 'Exhale';
+          phaseText.style.color = hex;
+          countText.textContent = breathNum;
+          countText.style.color = hex;
+          roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Breath ${breathNum} / ${BREATH_COUNT}`;
+          totalBar.style.background = hex;
+          const s = isIn ? 0.55 + breathFrac * 2 * 0.7 : 1.25 - (breathFrac - 0.5) * 2 * 0.7;
+          breathOrb.style.transform = `scale(${s})`;
+          breathOrb.setAttribute('fill', hex + '1e'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${s * 1.3})`;
+          if (subElapsed >= BREATH_COUNT * BREATH_DUR) {
+            subPhase = 'hold'; subStart = performance.now();
+            speakPhase('Hold your breath');
+            playPhaseChange(528);
+          }
+        } else if (subPhase === 'hold') {
+          const holdSecs = Math.floor(subElapsed);
+          const hex = '#a78bfa';
+          phaseText.textContent = 'Hold';
+          phaseText.style.color = hex;
+          countText.textContent = holdSecs;
+          countText.style.color = hex;
+          roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Retention`;
+          totalBar.style.background = hex;
+          breathOrb.style.transform = 'scale(0.4)';
+          breathOrb.setAttribute('fill', hex + '1e'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = 'scale(0.5)';
+          if (subElapsed >= HOLD_DUR) {
+            subPhase = 'recover'; subStart = performance.now();
+            speakPhase('Deep inhale, hold');
+            playPhaseChange(396);
+          }
+        } else {
+          const remaining = Math.max(Math.ceil(RECOV_DUR - subElapsed), 1);
+          const hex = '#5bd9a4';
+          phaseText.textContent = 'Inhale & Hold';
+          phaseText.style.color = hex;
+          countText.textContent = remaining;
+          countText.style.color = hex;
+          roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Recovery`;
+          totalBar.style.background = hex;
+          const s = 0.7 + (RECOV_DUR - subElapsed) / RECOV_DUR * 0.55;
+          breathOrb.style.transform = `scale(${Math.max(s, 0.7)})`;
+          breathOrb.setAttribute('fill', hex + '1e'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${Math.max(s * 1.3, 0.9)})`;
+          if (subElapsed >= RECOV_DUR) {
+            if (round >= TOTAL_ROUNDS) { endSession(); return; }
+            round++;
+            subPhase = 'breathe'; subStart = performance.now();
+            speakPhase('Round ' + round + ', begin');
+            playPhaseChange(396);
+          }
+        }
+        animFrame = requestAnimationFrame(wimTick);
+      }
+      animFrame = requestAnimationFrame(wimTick);
+    }
+
+    // ── Safety modal wiring ────────────────────────────────────────────────
+    const SAFETY_MSGS = {
+      wimhof: 'Wim Hof breathing involves rapid hyperventilation and extended breath retention. Never practice in water, while driving, or standing. Stop if you feel dizzy. Not suitable during pregnancy or with heart conditions.',
+      holo:   'Holotropic breathing involves sustained rapid breathing which may cause tingling, lightheadedness, or altered states. Practice only seated or lying down in a safe environment. Consult a doctor if you have heart, lung, or neurological conditions.',
+    };
+    let pendingTech = null;
+    let prevTech = 'box';
+
+    document.querySelectorAll('.tech-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (running) return;
+        const tech = btn.dataset.tech;
+        if (tech === 'wimhof' || tech === 'holo') {
+          pendingTech = tech;
+          safetyText.textContent = SAFETY_MSGS[tech];
+          safetyModal.classList.add('open');
+        } else {
+          prevTech = tech;
+          switchTechnique(tech);
+        }
+      });
+    });
+
+    document.getElementById('modalOk').addEventListener('click', () => {
+      safetyModal.classList.remove('open');
+      if (pendingTech) { prevTech = pendingTech; switchTechnique(pendingTech); pendingTech = null; }
+    });
+    document.getElementById('modalCancel').addEventListener('click', () => {
+      safetyModal.classList.remove('open');
+      if (prevTech) switchTechnique(prevTech);
+      pendingTech = null;
+    });
 
     startBtn.addEventListener('click', () => {
       if (running) stopSession(); else startSession();
     });
+
+    renderStats();
   </script>
 </body>
 </html>
