@@ -773,8 +773,8 @@
     function playVoice(label) {
       if (!document.getElementById('voiceToggle').checked) return;
       if (!voiceCtx) return;
-      const key = VOICE_KEY_MAP[label.toLowerCase()] || null;
-      if (!key || !voiceBuffers[key]) return;
+      const key = VOICE_KEY_MAP[label.toLowerCase()] ?? label.toLowerCase();
+      if (!voiceBuffers[key]) return;
       const src = voiceCtx.createBufferSource();
       src.buffer = voiceBuffers[key];
       src.connect(voiceCtx.destination);
