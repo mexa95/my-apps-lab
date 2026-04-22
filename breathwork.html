@@ -675,21 +675,26 @@
       });
     }
 
-    function playWhoosh() {
+    function playWhoosh(dir = 'in') {
       if (!document.getElementById('soundToggle').checked) return;
-      const ctx = getCtx(), t = ctx.currentTime, dur = 0.28;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const dur = dir === 'in' ? 0.28 : 0.34;
       const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
       const src = ctx.createBufferSource(); src.buffer = buf;
       const filt = ctx.createBiquadFilter();
-      filt.type = 'bandpass';
-      filt.frequency.setValueAtTime(350, t);
-      filt.frequency.exponentialRampToValueAtTime(2800, t + 0.18);
-      filt.Q.value = 0.7;
+      filt.type = 'bandpass'; filt.Q.value = 0.7;
+      if (dir === 'in') {
+        filt.frequency.setValueAtTime(350, t);
+        filt.frequency.exponentialRampToValueAtTime(2800, t + 0.18);
+      } else {
+        filt.frequency.setValueAtTime(2200, t);
+        filt.frequency.exponentialRampToValueAtTime(280, t + 0.26);
+      }
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.22, t + 0.03);
+      g.gain.linearRampToValueAtTime(dir === 'in' ? 0.22 : 0.17, t + 0.03);
       g.gain.exponentialRampToValueAtTime(0.001, t + dur);
       src.connect(filt); filt.connect(g); g.connect(ctx.destination);
       src.start(t); src.stop(t + dur);
@@ -1155,6 +1160,7 @@
       let subPhase = 'breathe';
       let subStart = performance.now();
       let lastBreathNum = 0;
+      let lastIsIn = true;
       const totalSecs = TOTAL_ROUNDS * (BREATH_COUNT * BREATH_DUR + HOLD_DUR + RECOV_DUR);
       const globalStart = performance.now();
 
@@ -1191,8 +1197,12 @@
           orbHalo.style.transform = `scale(${s * 1.35})`;
           orbHalo.setAttribute('fill', hex + '0e');
           if (breathNum !== lastBreathNum) {
-            playWhoosh();
+            playWhoosh('in');
             lastBreathNum = breathNum;
+            lastIsIn = true;
+          } else if (!isIn && lastIsIn) {
+            playWhoosh('out');
+            lastIsIn = false;
           }
           if (subElapsed >= BREATH_COUNT * BREATH_DUR) {
             subPhase = 'hold'; subStart = performance.now();
@@ -1233,7 +1243,7 @@
             if (round >= TOTAL_ROUNDS) { endSession(); return; }
             round++;
             subPhase = 'breathe'; subStart = performance.now();
-            lastBreathNum = 0;
+            lastBreathNum = 0; lastIsIn = true;
             playPhaseChange(396);
           }
         }
