@@ -815,6 +815,7 @@
     let nadiMusicNodes = null;
 
     function startNadiMusic() {
+      if (!document.getElementById('soundToggle').checked) return;
       const ctx = getCtx(), t = ctx.currentTime;
       const master = ctx.createGain();
       master.gain.setValueAtTime(0, t);
@@ -844,6 +845,7 @@
     function stopNadiMusic() {
       if (!nadiMusicNodes) return;
       const ctx = getCtx(), t = ctx.currentTime;
+      nadiMusicNodes.gain.cancelScheduledValues(t);
       nadiMusicNodes.gain.setValueAtTime(nadiMusicNodes.gain.value, t);
       nadiMusicNodes.gain.linearRampToValueAtTime(0, t + 2.5);
       const nodes = nadiMusicNodes._nodes || [];
@@ -1230,11 +1232,6 @@
 
     // ── Wim Hof engine ────────────────────────────────────────────────────
     function startWimhof() {
-      running = true;
-      startBtn.textContent = 'Stop';
-      optionsEl.style.opacity = '0.3'; optionsEl.style.pointerEvents = 'none';
-      totalBarWrap.classList.remove('hidden');
-
       const TOTAL_ROUNDS = 3;
       const BREATH_COUNT = 30;
       const BREATH_DUR   = 1.5;  // seconds per breath (faster than before)
