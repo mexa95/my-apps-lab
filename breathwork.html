@@ -614,6 +614,12 @@
       <div class="toggle-track"></div>
     </label>
 
+    <label class="toggle-row">
+      <span>Voice guide</span>
+      <input type="checkbox" id="voiceToggle">
+      <div class="toggle-track"></div>
+    </label>
+
     <div class="stats-widget">
       <div class="stat-item"><div class="stat-val" id="statSessions">0</div><div class="stat-lbl">Sessions</div></div>
       <div class="stat-item"><div class="stat-val" id="statStreak">0</div><div class="stat-lbl">Day streak 🔥</div></div>
@@ -719,6 +725,25 @@
       renderStats();
     }
 
+    // ── Voice guidance (custom M4A files) ─────────────────────────────────
+    const voiceFiles = {
+      inhale: new Audio('inhale.mp3.m4a'),
+      exhale: new Audio('exhale.mp3.m4a'),
+      hold:   new Audio('hold.mp3.m4a'),
+    };
+    const VOICE_KEY_MAP = {
+      'inhale': 'inhale', 'exhale': 'exhale', 'hold': 'hold',
+      'left nostril': 'inhale', 'right nostril': 'exhale',
+      'both closed': 'hold', 'inhale & hold': 'hold',
+    };
+    function playVoice(label) {
+      if (!document.getElementById('voiceToggle').checked) return;
+      const key = VOICE_KEY_MAP[label.toLowerCase()] || null;
+      if (!key) return;
+      const a = voiceFiles[key];
+      a.currentTime = 0;
+      a.play().catch(() => {});
+    }
 
     // ── Box path geometry ──────────────────────────────────────────────────
     const sides = [
@@ -1036,6 +1061,7 @@
 
         if (phaseIndex !== lastPhase) {
           playPhaseChange(p.freq);
+          playVoice(p.guide || p.name);
           lastPhase = phaseIndex;
         }
         if (currentCount !== lastCount) { if (lastCount !== -1) playTick(); lastCount = currentCount; }
@@ -1133,7 +1159,7 @@
           orbHalo.style.transform = `scale(${s * 1.3})`;
           if (subElapsed >= BREATH_COUNT * BREATH_DUR) {
             subPhase = 'hold'; subStart = performance.now();
-            playPhaseChange(528);
+            playPhaseChange(528); playVoice('hold');
           }
         } else if (subPhase === 'hold') {
           const holdSecs = Math.floor(subElapsed);
@@ -1149,7 +1175,7 @@
           orbHalo.style.transform = 'scale(0.5)';
           if (subElapsed >= HOLD_DUR) {
             subPhase = 'recover'; subStart = performance.now();
-            playPhaseChange(396);
+            playPhaseChange(396); playVoice('inhale');
           }
         } else {
           const remaining = Math.max(Math.ceil(RECOV_DUR - subElapsed), 1);
@@ -1168,7 +1194,7 @@
             if (round >= TOTAL_ROUNDS) { endSession(); return; }
             round++;
             subPhase = 'breathe'; subStart = performance.now();
-            playPhaseChange(396);
+            playPhaseChange(396); playVoice('inhale');
           }
         }
         animFrame = requestAnimationFrame(wimTick);
