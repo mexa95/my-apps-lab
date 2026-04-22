@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmos — Mehran's Playground</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0f;
+      overflow: hidden;
+      font-family: 'DM Sans', sans-serif;
+      cursor: crosshair;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    canvas { display: block; }
+
+    .back-btn {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: #6a6a80;
+      text-decoration: none;
+      letter-spacing: 1px;
+      z-index: 200;
+      transition: color 0.3s;
+      text-transform: uppercase;
+    }
+    .back-btn:hover { color: #00e5a0; }
+
+    #panel {
+      position: fixed;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(18, 18, 26, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      width: 224px;
+      font-family: 'Space Mono', monospace;
+      color: #e0e0e8;
+      z-index: 10;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
+      max-height: 90vh;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    #panel::-webkit-scrollbar { display: none; }
+
+    #panel.collapsed {
+      transform: translateY(-50%) translateX(calc(100% + 28px));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #panel-toggle {
+      position: fixed;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(18, 18, 26, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      width: 40px;
+      height: 40px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 11;
+      color: #6a6a80;
+      font-size: 16px;
+      transition: border-color 0.2s, color 0.2s;
+      font-family: 'Space Mono', monospace;
+    }
+    #panel-toggle:hover { border-color: rgba(255,255,255,0.2); color: #e0e0e8; }
+    #panel-toggle.visible { display: flex; }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .panel-title {
+      font-size: 0.75rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #e0e0e8;
+    }
+    .collapse-btn {
+      background: none;
+      border: none;
+      color: #6a6a80;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 4px;
+      transition: color 0.2s;
+      font-family: 'Space Mono', monospace;
+      line-height: 1;
+    }
+    .collapse-btn:hover { color: #e0e0e8; }
+
+    .panel-section { margin-bottom: 14px; }
+
+    .panel-label {
+      display: block;
+      font-size: 0.58rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #6a6a80;
+      margin-bottom: 8px;
+    }
+
+    .theme-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    .theme-btn {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+      outline: none;
+    }
+    .theme-btn:hover { transform: scale(1.12); }
+    .theme-btn.active { border-color: rgba(255, 255, 255, 0.7); }
+
+    .btn-group {
+      display: flex;
+      gap: 4px;
+    }
+    .toggle-btn {
+      flex: 1;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.58rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 6px 4px;
+      border: 1px solid #1e1e2e;
+      border-radius: 4px;
+      background: transparent;
+      color: #6a6a80;
+      cursor: pointer;
+      transition: all 0.2s;
+      outline: none;
+    }
+    .toggle-btn:hover { border-color: #e0e0e8; color: #e0e0e8; }
+    .toggle-btn.active {
+      border-color: #00e5a0;
+      color: #00e5a0;
+      background: rgba(0, 229, 160, 0.08);
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 3px;
+      background: #1e1e2e;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00e5a0;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 229, 160, 0.5);
+      transition: box-shadow 0.2s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 14px rgba(0, 229, 160, 0.8);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00e5a0;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 8px rgba(0, 229, 160, 0.5);
+    }
+
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .slider-label {
+      font-size: 0.58rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #6a6a80;
+    }
+    .slider-val {
+      font-size: 0.62rem;
+      color: #00e5a0;
+    }
+
+    .action-btn {
+      width: 100%;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 8px;
+      border: 1px solid #1e1e2e;
+      border-radius: 4px;
+      background: transparent;
+      color: #e0e0e8;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 6px;
+      outline: none;
+    }
+    .action-btn:hover {
+      border-color: #00e5a0;
+      color: #00e5a0;
+      background: rgba(0, 229, 160, 0.06);
+    }
+
+    .panel-divider {
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      margin: 12px 0;
+    }
+
+    .shortcuts-hint {
+      font-size: 0.55rem;
+      color: #3a3a50;
+      letter-spacing: 1px;
+      text-align: center;
+      line-height: 1.9;
+      margin-top: 4px;
+    }
+
+    #hud {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      color: rgba(106, 106, 128, 0.6);
+      letter-spacing: 1px;
+      pointer-events: none;
+      z-index: 10;
+      white-space: nowrap;
+    }
+
+    #pause-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 5;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #pause-overlay.visible { opacity: 1; }
+    #pause-overlay span {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.2rem;
+      color: rgba(255, 255, 255, 0.15);
+      letter-spacing: 10px;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 600px) {
+      #panel { width: 190px; padding: 16px; right: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-btn">← Back</a>
+  <canvas id="cosmos"></canvas>
+
+  <div id="panel">
+    <div class="panel-header">
+      <span class="panel-title">Cosmos</span>
+      <button class="collapse-btn" id="collapse-btn" title="Hide panel (C)">⟩</button>
+    </div>
+
+    <div class="panel-section">
+      <span class="panel-label">Theme</span>
+      <div class="theme-grid">
+        <button class="theme-btn active" data-theme="nebula"
+          style="background: linear-gradient(135deg, #b388ff, #82b1ff);" title="Nebula"></button>
+        <button class="theme-btn" data-theme="aurora"
+          style="background: linear-gradient(135deg, #00e5a0, #1de9b6);" title="Aurora"></button>
+        <button class="theme-btn" data-theme="ember"
+          style="background: linear-gradient(135deg, #ff6b4a, #ffeb3b);" title="Ember"></button>
+        <button class="theme-btn" data-theme="ocean"
+          style="background: linear-gradient(135deg, #0277bd, #00e5ff);" title="Ocean"></button>
+        <button class="theme-btn" data-theme="void"
+          style="background: linear-gradient(135deg, #333, #fff);" title="Void"></button>
+      </div>
+    </div>
+
+    <hr class="panel-divider">
+
+    <div class="panel-section">
+      <div class="slider-row">
+        <span class="slider-label">Speed</span>
+        <span class="slider-val" id="speed-val">1.0×</span>
+      </div>
+      <input type="range" id="speed-slider" min="0.5" max="3" step="0.1" value="1">
+    </div>
+
+    <div class="panel-section">
+      <div class="slider-row">
+        <span class="slider-label">Turbulence</span>
+        <span class="slider-val" id="turb-val">3</span>
+      </div>
+      <input type="range" id="turb-slider" min="1" max="10" step="1" value="3">
+    </div>
+
+    <hr class="panel-divider">
+
+    <div class="panel-section">
+      <span class="panel-label">Particles</span>
+      <div class="btn-group">
+        <button class="toggle-btn" data-count="1000">1k</button>
+        <button class="toggle-btn active" data-count="2000">2k</button>
+        <button class="toggle-btn" data-count="4000">4k</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <span class="panel-label">Trail</span>
+      <div class="btn-group">
+        <button class="toggle-btn" data-trail="0.08">Short</button>
+        <button class="toggle-btn active" data-trail="0.04">Med</button>
+        <button class="toggle-btn" data-trail="0.018">Long</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <span class="panel-label">Mouse</span>
+      <div class="btn-group">
+        <button class="toggle-btn active" data-mode="attract">Pull</button>
+        <button class="toggle-btn" data-mode="repel">Push</button>
+        <button class="toggle-btn" data-mode="off">Off</button>
+      </div>
+    </div>
+
+    <hr class="panel-divider">
+
+    <button class="action-btn" id="save-btn">📷 Save PNG</button>
+    <button class="action-btn" id="regen-btn">↺ Regenerate</button>
+
+    <div class="shortcuts-hint">
+      Space pause · R regen<br>S save · C hide
+    </div>
+  </div>
+
+  <div id="panel-toggle">⟨</div>
+  <div id="pause-overlay"><span>Paused</span></div>
+  <div id="hud">60 fps · 2000 particles</div>
+
+  <script>
+    /* ─── 1. PERLIN NOISE ─────────────────────────────────────────────────── */
+    const Perlin = (() => {
+      const perm = new Uint8Array(512);
+      const src = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,
+        140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,
+        0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,
+        174,20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,
+        158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,
+        102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,
+        196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226,
+        250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,
+        58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,70,221,
+        153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,
+        178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,
+        162,241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,
+        184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,
+        67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+      for (let i = 0; i < 512; i++) perm[i] = src[i & 255];
+
+      const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const grad = (h, x, y, z) => {
+        h &= 15;
+        const u = h < 8 ? x : y;
+        const v = h < 4 ? y : (h === 12 || h === 14 ? x : z);
+        return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+      };
+
+      return {
+        noise(x, y, z = 0) {
+          const X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+          x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+          const u = fade(x), v = fade(y), w = fade(z);
+          const A = perm[X] + Y, AA = perm[A] + Z, AB = perm[A + 1] + Z;
+          const B = perm[X + 1] + Y, BA = perm[B] + Z, BB = perm[B + 1] + Z;
+          return lerp(
+            lerp(lerp(grad(perm[AA], x, y, z),     grad(perm[BA], x-1, y, z), u),
+                 lerp(grad(perm[AB], x, y-1, z),   grad(perm[BB], x-1, y-1, z), u), v),
+            lerp(lerp(grad(perm[AA+1], x, y, z-1), grad(perm[BA+1], x-1, y, z-1), u),
+                 lerp(grad(perm[AB+1], x, y-1, z-1), grad(perm[BB+1], x-1, y-1, z-1), u), v), w);
+        }
+      };
+    })();
+
+    /* ─── 2. CONFIG & STATE ───────────────────────────────────────────────── */
+    const THEMES = {
+      nebula: { bg: [10,10,15],   colors: ['#b388ff','#ea80fc','#82b1ff','#80d8ff','#ffffff'], glow: '#b388ff' },
+      aurora: { bg: [5,13,10],    colors: ['#00e5a0','#1de9b6','#69f0ae','#b9f6ca','#e0ffe0'], glow: '#00e5a0' },
+      ember:  { bg: [15,8,0],     colors: ['#ff6b4a','#ff9800','#ffeb3b','#ffd740','#ffffff'], glow: '#ff6b4a' },
+      ocean:  { bg: [0,5,15],     colors: ['#0277bd','#00b0ff','#00e5ff','#84ffff','#ffffff'], glow: '#00b0ff' },
+      void:   { bg: [0,0,0],      colors: ['#333333','#666666','#999999','#cccccc','#ffffff'], glow: '#ffffff'  }
+    };
+
+    const cfg = {
+      theme: 'nebula',
+      speed: 1.0,
+      count: 2000,
+      trailAlpha: 0.04,
+      turbulence: 3,       // 1–10, mapped to 0.0003–0.003
+      mouseMode: 'attract'
+    };
+
+    const canvas = document.getElementById('cosmos');
+    const ctx = canvas.getContext('2d');
+    let W, H, dpr;
+
+    const CELL = 10;
+    let fieldCols, fieldRows, flowField;
+    let particles = [], stars = [], distortions = [];
+    let time = 0;
+    let paused = false;
+    let frameCount = 0, lastFpsTime = 0, fps = 60;
+    let frameIdx = 0;
+
+    const mouse = { x: -9999, y: -9999, active: false };
+
+    /* ─── 3. STARS ────────────────────────────────────────────────────────── */
+    function initStars() {
+      stars = [];
+      for (let i = 0; i < 200; i++) {
+        stars.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          r: Math.random() * 1.1 + 0.2,
+          baseAlpha: Math.random() * 0.35 + 0.08,
+          phase: Math.random() * Math.PI * 2,
+          speed: Math.random() * 0.5 + 0.2
+        });
+      }
+    }
+
+    function drawStars(ts) {
+      ctx.save();
+      for (const s of stars) {
+        const alpha = s.baseAlpha + Math.sin(ts * 0.001 * s.speed + s.phase) * 0.08;
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    /* ─── 4. PARTICLES ────────────────────────────────────────────────────── */
+    function makeParticle() {
+      const colors = THEMES[cfg.theme].colors;
+      const p = {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: 0, vy: 0,
+        age: Math.random() * 200,
+        maxLife: 140 + Math.random() * 220,
+        size: 0.9 + Math.random() * 1.7,
+        colorIdx: Math.floor(Math.random() * colors.length)
+      };
+      return p;
+    }
+
+    function resetParticle(p) {
+      const colors = THEMES[cfg.theme].colors;
+      if (Math.random() < 0.35) {
+        const edge = Math.floor(Math.random() * 4);
+        if (edge === 0)      { p.x = Math.random() * W; p.y = -5; }
+        else if (edge === 1) { p.x = W + 5; p.y = Math.random() * H; }
+        else if (edge === 2) { p.x = Math.random() * W; p.y = H + 5; }
+        else                 { p.x = -5; p.y = Math.random() * H; }
+      } else {
+        p.x = Math.random() * W;
+        p.y = Math.random() * H;
+      }
+      p.vx = 0; p.vy = 0;
+      p.age = 0;
+      p.maxLife = 140 + Math.random() * 220;
+      p.size = 0.9 + Math.random() * 1.7;
+      p.colorIdx = Math.floor(Math.random() * colors.length);
+    }
+
+    function initParticles() {
+      particles = [];
+      for (let i = 0; i < cfg.count; i++) particles.push(makeParticle());
+    }
+
+    /* ─── 5. FLOW FIELD ──────────────────────────────────────────────────── */
+    function initFlowField() {
+      fieldCols = Math.ceil(W / CELL) + 2;
+      fieldRows = Math.ceil(H / CELL) + 2;
+      flowField = new Float32Array(fieldCols * fieldRows);
+    }
+
+    function updateFlowField() {
+      const scale = cfg.turbulence * 0.0003;
+      const stride = fieldCols;
+      for (let row = 0; row < fieldRows; row++) {
+        for (let col = 0; col < fieldCols; col++) {
+          const n = Perlin.noise(col * scale, row * scale, time);
+          flowField[row * stride + col] = (n + 1) * Math.PI * 2;
+        }
+      }
+    }
+
+    function getFieldAngle(x, y) {
+      const col = Math.max(0, Math.min(fieldCols - 1, Math.floor(x / CELL)));
+      const row = Math.max(0, Math.min(fieldRows - 1, Math.floor(y / CELL)));
+      return flowField[row * fieldCols + col];
+    }
+
+    /* ─── 6. UPDATE PARTICLE ──────────────────────────────────────────────── */
+    function updateParticle(p, dt) {
+      let angle = getFieldAngle(p.x, p.y);
+
+      // Distortion from click bursts
+      for (const d of distortions) {
+        const dx = p.x - d.x, dy = p.y - d.y;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 < d.radius * d.radius) {
+          const dist = Math.sqrt(dist2);
+          const falloff = (1 - dist / d.radius) * (d.life / d.maxLife);
+          angle += falloff * d.strength;
+        }
+      }
+
+      // Flow force
+      p.vx += Math.cos(angle) * 0.4 * cfg.speed * dt;
+      p.vy += Math.sin(angle) * 0.4 * cfg.speed * dt;
+
+      // Mouse force
+      if (cfg.mouseMode !== 'off' && mouse.active) {
+        const dx = mouse.x - p.x, dy = mouse.y - p.y;
+        const dist2 = dx * dx + dy * dy;
+        const radius = 160;
+        if (dist2 < radius * radius && dist2 > 0.01) {
+          const dist = Math.sqrt(dist2);
+          const strength = ((radius - dist) / radius) * 1.6 * cfg.speed * dt;
+          const nx = dx / dist, ny = dy / dist;
+          if (cfg.mouseMode === 'attract') { p.vx += nx * strength; p.vy += ny * strength; }
+          else                             { p.vx -= nx * strength; p.vy -= ny * strength; }
+        }
+      }
+
+      // Damping + speed cap
+      p.vx *= 0.92;
+      p.vy *= 0.92;
+      const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      const maxSpd = 4 * cfg.speed;
+      if (spd > maxSpd) { const s = maxSpd / spd; p.vx *= s; p.vy *= s; }
+
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.age += dt;
+
+      // Wrap at edges
+      if (p.x < -8) p.x += W + 16;
+      else if (p.x > W + 8) p.x -= W + 16;
+      if (p.y < -8) p.y += H + 16;
+      else if (p.y > H + 8) p.y -= H + 16;
+
+      if (p.age >= p.maxLife) resetParticle(p);
+    }
+
+    /* ─── 7. DRAW PARTICLES (batched by color) ────────────────────────────── */
+    function drawParticles() {
+      const colors = THEMES[cfg.theme].colors;
+      ctx.save();
+      ctx.shadowBlur = 7;
+
+      for (let ci = 0; ci < colors.length; ci++) {
+        ctx.fillStyle = colors[ci];
+        ctx.shadowColor = colors[ci];
+        ctx.beginPath();
+        for (const p of particles) {
+          if (p.colorIdx !== ci) continue;
+          const life = p.age / p.maxLife;
+          const alpha = Math.min(life * 4, 1) * Math.min((1 - life) * 6, 1);
+          if (alpha < 0.02) continue;
+          const r = Math.max(0.3, p.size * alpha);
+          ctx.moveTo(p.x + r, p.y);
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    /* ─── 8. RENDER LOOP ─────────────────────────────────────────────────── */
+    let lastTs = 0;
+
+    function frame(ts) {
+      if (paused) { requestAnimationFrame(frame); return; }
+
+      const rawDt = ts - (lastTs || ts);
+      lastTs = ts;
+      const dt = Math.min(rawDt, 80) / 16.667;
+
+      // FPS
+      frameCount++;
+      if (ts - lastFpsTime > 600) {
+        fps = Math.round(frameCount / ((ts - lastFpsTime) / 1000));
+        frameCount = 0;
+        lastFpsTime = ts;
+        document.getElementById('hud').textContent =
+          `${fps} fps  ·  ${particles.length.toLocaleString()} particles`;
+      }
+
+      // Advance noise time
+      time += 0.002 * cfg.speed * dt;
+
+      // Update flow field every other frame for perf
+      if (frameIdx++ % 2 === 0) updateFlowField();
+
+      // Trail fade
+      const bg = THEMES[cfg.theme].bg;
+      ctx.fillStyle = `rgba(${bg[0]},${bg[1]},${bg[2]},${cfg.trailAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+
+      // Stars
+      drawStars(ts);
+
+      // Update + decay distortions
+      for (let i = distortions.length - 1; i >= 0; i--) {
+        distortions[i].life -= dt;
+        if (distortions[i].life <= 0) distortions.splice(i, 1);
+      }
+
+      // Particles
+      for (const p of particles) updateParticle(p, dt);
+      drawParticles();
+
+      requestAnimationFrame(frame);
+    }
+
+    /* ─── 9. INTERACTION ─────────────────────────────────────────────────── */
+    canvas.addEventListener('mousemove', e => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+      mouse.active = true;
+    });
+    canvas.addEventListener('mouseleave', () => { mouse.active = false; });
+
+    canvas.addEventListener('click', e => {
+      const cx = e.clientX, cy = e.clientY;
+      // Burst nearby particles outward
+      for (const p of particles) {
+        const dx = p.x - cx, dy = p.y - cy;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 < 180 * 180 && dist2 > 0.01) {
+          const dist = Math.sqrt(dist2);
+          const str = (1 - dist / 180) * 9;
+          p.vx += (dx / dist) * str;
+          p.vy += (dy / dist) * str;
+        }
+      }
+      // Flow field distortion
+      distortions.push({ x: cx, y: cy, radius: 210, strength: 5, life: 65, maxLife: 65 });
+    });
+
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const cx = e.clientX, cy = e.clientY;
+      for (const p of particles) {
+        const dx = p.x - cx, dy = p.y - cy;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 < 220 * 220 && dist2 > 0.01) {
+          const dist = Math.sqrt(dist2);
+          const str = (1 - dist / 220) * 11;
+          p.vx += (dx / dist) * str;
+          p.vy += (dy / dist) * str;
+        }
+      }
+    });
+
+    // Touch support
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      mouse.x = e.touches[0].clientX;
+      mouse.y = e.touches[0].clientY;
+      mouse.active = true;
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { mouse.active = false; }, { passive: true });
+    canvas.addEventListener('touchstart', e => {
+      mouse.x = e.touches[0].clientX;
+      mouse.y = e.touches[0].clientY;
+      mouse.active = true;
+    }, { passive: true });
+
+    /* ─── 10. PANEL & CONTROLS ───────────────────────────────────────────── */
+    let panelCollapsed = false;
+    const panel = document.getElementById('panel');
+    const panelToggle = document.getElementById('panel-toggle');
+
+    function togglePanel() {
+      panelCollapsed = !panelCollapsed;
+      panel.classList.toggle('collapsed', panelCollapsed);
+      panelToggle.classList.toggle('visible', panelCollapsed);
+    }
+
+    document.getElementById('collapse-btn').addEventListener('click', togglePanel);
+    panelToggle.addEventListener('click', togglePanel);
+
+    // Theme
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cfg.theme = btn.dataset.theme;
+        // Wipe canvas cleanly on theme switch
+        const bg = THEMES[cfg.theme].bg;
+        ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
+        ctx.fillRect(0, 0, W, H);
+        // Reassign particle colors
+        const colors = THEMES[cfg.theme].colors;
+        for (const p of particles) p.colorIdx = Math.floor(Math.random() * colors.length);
+      });
+    });
+
+    // Speed
+    const speedSlider = document.getElementById('speed-slider');
+    const speedVal = document.getElementById('speed-val');
+    speedSlider.addEventListener('input', () => {
+      cfg.speed = parseFloat(speedSlider.value);
+      speedVal.textContent = cfg.speed.toFixed(1) + '×';
+    });
+
+    // Turbulence
+    const turbSlider = document.getElementById('turb-slider');
+    const turbVal = document.getElementById('turb-val');
+    turbSlider.addEventListener('input', () => {
+      cfg.turbulence = parseInt(turbSlider.value);
+      turbVal.textContent = turbSlider.value;
+    });
+
+    // Particle count
+    document.querySelectorAll('[data-count]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-count]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cfg.count = parseInt(btn.dataset.count);
+        initParticles();
+      });
+    });
+
+    // Trail
+    document.querySelectorAll('[data-trail]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-trail]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cfg.trailAlpha = parseFloat(btn.dataset.trail);
+      });
+    });
+
+    // Mouse mode
+    document.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cfg.mouseMode = btn.dataset.mode;
+      });
+    });
+
+    // Action buttons
+    document.getElementById('save-btn').addEventListener('click', savePNG);
+    document.getElementById('regen-btn').addEventListener('click', regenerate);
+
+    /* ─── 11. KEYBOARD ───────────────────────────────────────────────────── */
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          paused = !paused;
+          if (!paused) lastTs = 0; // reset dt on resume to avoid big jump
+          document.getElementById('pause-overlay').classList.toggle('visible', paused);
+          break;
+        case 'r': case 'R': regenerate(); break;
+        case 's': case 'S': savePNG(); break;
+        case 'c': case 'C': togglePanel(); break;
+      }
+    });
+
+    /* ─── 12. SAVE PNG ───────────────────────────────────────────────────── */
+    function savePNG() {
+      const link = document.createElement('a');
+      link.download = `cosmos-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    /* ─── 13. REGENERATE ─────────────────────────────────────────────────── */
+    function regenerate() {
+      const bg = THEMES[cfg.theme].bg;
+      ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
+      ctx.fillRect(0, 0, W, H);
+      time = Math.random() * 800 + 100;
+      distortions = [];
+      initParticles();
+    }
+
+    /* ─── 14. RESIZE & INIT ──────────────────────────────────────────────── */
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.scale(dpr, dpr);
+
+      initFlowField();
+      initStars();
+
+      // Clamp existing particles to new bounds
+      for (const p of particles) {
+        p.x = Math.min(p.x, W);
+        p.y = Math.min(p.y, H);
+      }
+    }
+
+    function init() {
+      resize();
+      initParticles();
+      lastFpsTime = performance.now();
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('resize', () => {
+      resize();
+    });
+
+    init();
+  </script>
+</body>
+</html>
