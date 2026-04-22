@@ -756,9 +756,14 @@
     async function initVoiceAudio() {
       if (voiceCtx) { if (voiceCtx.state === 'suspended') await voiceCtx.resume(); return; }
       voiceCtx = new (window.AudioContext || window.webkitAudioContext)();
-      await Promise.all(['inhale', 'exhale', 'hold'].map(async key => {
+      const FILE_MAP = {
+        inhale: 'inhale.mp3.m4a', exhale: 'exhale.mp3.m4a', hold: 'hold.mp3.m4a',
+        inhale_left: 'inhale_left.m4a', inhale_right: 'inhale_right.m4a',
+        exhale_left: 'exhale_left.m4a', exhale_right: 'exhale_right.m4a',
+      };
+      await Promise.all(Object.entries(FILE_MAP).map(async ([key, file]) => {
         try {
-          const res = await fetch(`${key}.mp3.m4a`);
+          const res = await fetch(file);
           const buf = await res.arrayBuffer();
           voiceBuffers[key] = await voiceCtx.decodeAudioData(buf);
         } catch {}
@@ -1093,7 +1098,14 @@
 
         if (phaseIndex !== lastPhase) {
           playPhaseChange(p.freq);
-          playVoice(p.name);
+          if (currentTech === 'nadi') {
+            const nKey = p.flow === 'in'  ? `inhale_${p.open}`
+                       : p.flow === 'out' ? `exhale_${p.open}`
+                       : 'hold';
+            playVoice(nKey);
+          } else {
+            playVoice(p.name);
+          }
           lastPhase = phaseIndex;
         }
         if (currentCount !== lastCount) { if (lastCount !== -1) playTick(); lastCount = currentCount; }
