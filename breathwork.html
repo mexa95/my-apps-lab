@@ -1089,15 +1089,15 @@
       phaseText.style.color = 'var(--exhale)';
       countText.textContent = '🙏';
       guideText.textContent = '';
-      cycleText.textContent = `${selectedMinutes} minutes`;
+      cycleText.textContent = currentTech === 'wimhof' ? '3 rounds' : `${selectedMinutes} minutes`;
       totalBar.style.width = '100%';
       startBtn.textContent = 'Begin';
       optionsEl.style.opacity = '1'; optionsEl.style.pointerEvents = 'auto';
       timingWrap.style.opacity = ''; timingWrap.style.pointerEvents = '';
       if (currentTech === 'box') resetBoxVisual();
-      else if (currentTech === 'nadi') { progressArc.style.strokeDashoffset = 0; resetNadiVisual(); }
-      else { orbProgressArc.style.strokeDashoffset = 0; resetOrbVisual(); }
-      if (currentTech === 'wimhof') { roundText.textContent = `${3} / 3 complete ✓`; }
+      else if (currentTech === 'nadi') { resetNadiVisual(); progressArc.style.strokeDashoffset = 0; }
+      else if (currentTech !== 'wimhof') { resetOrbVisual(); orbProgressArc.style.strokeDashoffset = 0; }
+      if (currentTech === 'wimhof') { roundText.textContent = '3 / 3 complete ✓'; }
     }
 
     function stopSession() {
@@ -1141,6 +1141,7 @@
 
       totalTimeEl.textContent = formatTime(totalSecs);
       playGong();
+      playVoice('inhale');
 
       function wimTick() {
         if (!running) return;
