@@ -26,19 +26,19 @@
       font-family: 'DM Sans', sans-serif;
       min-height: 100dvh;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      overflow: hidden;
+      overflow-y: auto;
     }
 
     .app {
       width: 100%;
       max-width: 460px;
-      padding: 24px;
+      padding: 16px 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 20px;
+      gap: 12px;
       animation: fadeIn 0.6s ease-out;
     }
 
@@ -70,8 +70,8 @@
     /* Box visual */
     .box-wrap {
       position: relative;
-      width: 260px;
-      height: 260px;
+      width: 220px;
+      height: 220px;
     }
 
     .box-svg {
@@ -389,7 +389,7 @@
     }
 
     /* Stats widget */
-    .stats-widget { display: flex; gap: 24px; padding: 10px 24px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .stats-widget { display: flex; gap: 24px; padding: 8px 20px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
     .stat-item { text-align: center; }
     .stat-val { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--inhale); line-height: 1; }
     .stat-lbl { font-size: 0.6rem; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
@@ -407,8 +407,8 @@
     .round-text { font-size: 0.68rem; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; min-height: 16px; }
 
     @media (max-width: 400px) {
-      .box-wrap { width: 220px; height: 220px; }
-      .count-text { font-size: 3.5rem; }
+      .box-wrap { width: 190px; height: 190px; }
+      .count-text { font-size: 3rem; }
     }
   </style>
 </head>
@@ -614,12 +614,6 @@
       <div class="toggle-track"></div>
     </label>
 
-    <label class="toggle-row">
-      <span>Voice guide</span>
-      <input type="checkbox" id="voiceToggle">
-      <div class="toggle-track"></div>
-    </label>
-
     <div class="stats-widget">
       <div class="stat-item"><div class="stat-val" id="statSessions">0</div><div class="stat-lbl">Sessions</div></div>
       <div class="stat-item"><div class="stat-val" id="statStreak">0</div><div class="stat-lbl">Day streak 🔥</div></div>
@@ -725,15 +719,6 @@
       renderStats();
     }
 
-    // ── Voice guidance ─────────────────────────────────────────────────────
-    function speakPhase(text) {
-      if (!document.getElementById('voiceToggle').checked) return;
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.85; u.volume = 0.9;
-      window.speechSynthesis.speak(u);
-    }
 
     // ── Box path geometry ──────────────────────────────────────────────────
     const sides = [
@@ -780,9 +765,9 @@
     const orbProgressArc = document.getElementById('orbProgressArc');
     const breathOrb    = document.getElementById('breathOrb');
     const orbHalo      = document.getElementById('orbHalo');
-    const roundText    = document.getElementById('roundText');
-    const safetyModal  = document.getElementById('safetyModal');
-    const safetyText   = document.getElementById('safetyText');
+    const roundText   = document.getElementById('roundText');
+    const safetyModal = document.getElementById('safetyModal');
+    const safetyText  = document.getElementById('safetyText');
 
     let selectedMinutes = 5;
     let running = false;
@@ -1051,7 +1036,6 @@
 
         if (phaseIndex !== lastPhase) {
           playPhaseChange(p.freq);
-          speakPhase(p.guide || p.name);
           lastPhase = phaseIndex;
         }
         if (currentCount !== lastCount) { if (lastCount !== -1) playTick(); lastCount = currentCount; }
@@ -1149,7 +1133,6 @@
           orbHalo.style.transform = `scale(${s * 1.3})`;
           if (subElapsed >= BREATH_COUNT * BREATH_DUR) {
             subPhase = 'hold'; subStart = performance.now();
-            speakPhase('Hold your breath');
             playPhaseChange(528);
           }
         } else if (subPhase === 'hold') {
@@ -1166,7 +1149,6 @@
           orbHalo.style.transform = 'scale(0.5)';
           if (subElapsed >= HOLD_DUR) {
             subPhase = 'recover'; subStart = performance.now();
-            speakPhase('Deep inhale, hold');
             playPhaseChange(396);
           }
         } else {
@@ -1186,7 +1168,6 @@
             if (round >= TOTAL_ROUNDS) { endSession(); return; }
             round++;
             subPhase = 'breathe'; subStart = performance.now();
-            speakPhase('Round ' + round + ', begin');
             playPhaseChange(396);
           }
         }
