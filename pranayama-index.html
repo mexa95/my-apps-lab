@@ -437,6 +437,13 @@
       .dur-btn { padding: 8px 14px; font-size: 0.78rem; }
       .stats-widget { gap: 16px; padding: 8px 14px; }
     }
+
+    @keyframes countPop {
+      0%   { transform: scale(1.4); opacity: 0; }
+      20%  { opacity: 1; }
+      75%  { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0.8); opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -1092,6 +1099,28 @@
       return `${m}:${String(s).padStart(2, '0')}`;
     }
 
+    // ── Countdown ─────────────────────────────────────────────────────────
+    function startCountdown() {
+      return new Promise(resolve => {
+        phaseText.textContent = 'Get Ready';
+        phaseText.style.color = 'var(--dim)';
+        let count = 3;
+        const tick = () => {
+          if (!running) { resolve(); return; }
+          countText.textContent = count;
+          countText.style.color = 'var(--text)';
+          countText.style.animation = 'none';
+          void countText.offsetHeight;
+          countText.style.animation = 'countPop 0.9s ease-out forwards';
+          playTick();
+          count--;
+          if (count < 0) { setTimeout(resolve, 950); }
+          else { setTimeout(tick, 1000); }
+        };
+        tick();
+      });
+    }
+
     // ── Session ────────────────────────────────────────────────────────────
     async function startSession() {
       running = true;
@@ -1100,9 +1129,11 @@
       optionsEl.style.pointerEvents = 'none';
       timingWrap.style.opacity = '0.3';
       timingWrap.style.pointerEvents = 'none';
-      totalBarWrap.classList.remove('hidden');
-
       if (document.getElementById('voiceToggle').checked) await initVoiceAudio();
+      await startCountdown();
+      if (!running) return;
+
+      totalBarWrap.classList.remove('hidden');
       if (currentTech === 'wimhof') { startWimhof(); return; }
 
       const phases = currentTech === 'box'
