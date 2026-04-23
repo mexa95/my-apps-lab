@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pranayama</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090b0e;
+      --surface: #111419;
+      --border: #1c2028;
+      --text: #d0ccc4;
+      --dim: #4e4d4a;
+      --inhale: #5ba4d9;
+      --hold: #a78bfa;
+      --exhale: #5bd9a4;
+      --hold2: #d9a45b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-y: auto;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 480px;
+      padding: 16px 16px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      animation: fadeIn 0.6s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Header */
+    .header { text-align: center; }
+
+    .header h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 1.9rem;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+      background: linear-gradient(135deg, var(--inhale), var(--exhale));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header p {
+      font-size: 0.78rem;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+    }
+
+    /* Box visual */
+    .box-wrap {
+      position: relative;
+      width: 220px;
+      height: 220px;
+    }
+
+    .box-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .box-side {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .box-progress {
+      fill: none;
+      stroke-width: 3;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 8px currentColor);
+      transition: stroke 0.3s ease;
+    }
+
+    /* Center content */
+    .box-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .phase-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 1.5rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      transition: color 0.3s ease;
+      min-height: 36px;
+    }
+
+    .count-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: 4.5rem;
+      line-height: 1;
+      margin-top: 2px;
+      transition: color 0.3s ease;
+    }
+
+    .cycle-text {
+      font-size: 0.7rem;
+      color: var(--dim);
+      letter-spacing: 2px;
+      margin-top: 10px;
+    }
+
+    /* Breathing circle behind count */
+    .breath-circle {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      opacity: 0.08;
+      transition: all 1s ease-in-out;
+      pointer-events: none;
+    }
+
+    .breath-circle.inhale { transform: scale(1.8); }
+    .breath-circle.hold { transform: scale(1.8); }
+    .breath-circle.exhale { transform: scale(0.6); }
+    .breath-circle.hold2 { transform: scale(0.6); }
+
+    /* Duration selector */
+    .options { text-align: center; }
+
+    .options label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--dim);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .dur-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      padding: 2px 0 4px;
+      width: 100%;
+      justify-content: flex-start;
+    }
+    .dur-row::-webkit-scrollbar { display: none; }
+
+    .dur-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--dim);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 9px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .dur-btn:hover { border-color: var(--inhale); color: var(--inhale); }
+    .dur-btn.selected { border-color: var(--inhale); color: var(--inhale); background: rgba(91,164,217,0.08); }
+
+    /* Toggles row — both side by side */
+    .toggles-wrap {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .toggle-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--dim);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-row input { display: none; }
+
+    .toggle-track {
+      width: 34px;
+      height: 18px;
+      background: var(--border);
+      border-radius: 9px;
+      position: relative;
+      transition: background 0.2s ease;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--dim);
+      top: 2px; left: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .toggle-row input:checked + .toggle-track { background: var(--inhale); }
+    .toggle-row input:checked + .toggle-track::after { left: 18px; background: white; }
+
+    /* Main button */
+    .start-btn {
+      appearance: none;
+      border: 1px solid var(--inhale);
+      background: transparent;
+      color: var(--inhale);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      padding: 15px 48px;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .start-btn:hover { box-shadow: 0 0 28px rgba(91,164,217,0.15); }
+    .start-btn:active { transform: scale(0.97); }
+
+    /* Progress bar for total time */
+    .total-bar-wrap {
+      width: 100%;
+      max-width: 260px;
+    }
+
+    .total-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .total-bar-track {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .total-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 3px;
+      background: var(--inhale);
+      transition: width 0.5s linear, background 0.3s ease;
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.68rem;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .hidden { display: none !important; }
+
+    /* Technique selector */
+    .tech-row {
+      display: flex;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x mandatory;
+    }
+    .tech-row::-webkit-scrollbar { display: none; }
+
+    .tech-btn {
+      flex: 0 0 auto;
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--dim);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.79rem;
+      font-weight: 500;
+      padding: 11px 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      scroll-snap-align: start;
+    }
+
+    .tech-btn + .tech-btn { border-left: 1px solid var(--border); }
+    .tech-btn.selected { background: rgba(91,164,217,0.1); color: var(--inhale); }
+    .tech-btn:hover:not(.selected) { color: var(--text); }
+    .tech-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Guide text (Nadi Sodhana nostril instruction) */
+    .guide-text {
+      font-size: 0.68rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 6px;
+      transition: color 0.3s ease;
+      min-height: 18px;
+    }
+
+    /* Shift center content up in nadi mode so it clears the nostrils */
+    .box-wrap.nadi-mode .box-center { padding-bottom: 64px; }
+
+    /* Nostril glow elements — scale around their own center */
+    #leftGlow, #rightGlow {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 0.8s ease-in-out, opacity 0.4s ease;
+    }
+
+    /* Flow dot animations */
+    @keyframes floatUp {
+      0%   { transform: translateY(10px); opacity: 0; }
+      25%  { opacity: 0.85; }
+      100% { transform: translateY(-14px); opacity: 0; }
+    }
+    @keyframes floatDown {
+      0%   { transform: translateY(-10px); opacity: 0; }
+      25%  { opacity: 0.85; }
+      100% { transform: translateY(14px); opacity: 0; }
+    }
+
+    .dot-flow-up {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: floatUp 1.4s ease-in infinite;
+    }
+    .dot-flow-up:nth-child(2) { animation-delay: 0.47s; }
+    .dot-flow-up:nth-child(3) { animation-delay: 0.94s; }
+
+    .dot-flow-down {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: floatDown 1.4s ease-in infinite;
+    }
+    .dot-flow-down:nth-child(2) { animation-delay: 0.47s; }
+    .dot-flow-down:nth-child(3) { animation-delay: 0.94s; }
+
+    /* Phase timing stepper (box breathing only) */
+    .timing-wrap { text-align: center; width: 100%; }
+    .timing-lbl { font-size: 0.72rem; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+    .timing-grid { display: flex; gap: 6px; justify-content: center; }
+    .timing-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .timing-name { font-size: 0.63rem; letter-spacing: 1px; text-transform: uppercase; }
+    .stepper { display: flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 8px; padding: 3px 5px; background: var(--surface); }
+    .step-btn { appearance: none; border: none; background: transparent; color: var(--dim); font-size: 1.1rem; line-height: 1; width: 22px; height: 22px; cursor: pointer; border-radius: 4px; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+    .step-btn:hover:not(:disabled) { color: var(--inhale); background: rgba(91,164,217,0.1); }
+    .step-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .step-val { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--text); min-width: 22px; text-align: center; }
+
+    /* 4-7-8 breathing orb */
+    #breathOrb, #orbHalo {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 0.35s ease-out;
+    }
+
+    /* Stats widget */
+    .stats-widget { display: flex; gap: 24px; padding: 8px 20px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .stat-item { text-align: center; }
+    .stat-val { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--inhale); line-height: 1; }
+    .stat-lbl { font-size: 0.6rem; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+    /* Safety modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+    .modal-overlay.open { display: flex; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; max-width: 340px; text-align: center; }
+    .modal-box h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; font-weight: 400; color: #f59e0b; margin-bottom: 12px; }
+    .modal-box p { font-size: 0.8rem; color: var(--dim); line-height: 1.7; margin-bottom: 20px; }
+    .modal-ok { appearance: none; border: 1px solid var(--inhale); background: transparent; color: var(--inhale); font-family: 'DM Sans', sans-serif; font-size: 0.85rem; padding: 10px 32px; border-radius: 50px; cursor: pointer; }
+    .modal-cancel { appearance: none; border: none; background: transparent; color: var(--dim); font-size: 0.78rem; cursor: pointer; margin-left: 16px; }
+
+    /* Round indicator */
+    .round-text { font-size: 0.68rem; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; min-height: 16px; }
+
+    @media (max-width: 480px) {
+      .app { gap: 10px; padding: 12px 12px 32px; }
+      .header h1 { font-size: 1.65rem; }
+      .box-wrap { width: 200px; height: 200px; }
+      .count-text { font-size: 3.4rem; }
+      .timing-grid { gap: 4px; }
+      .stepper { padding: 2px 4px; }
+      .step-val { font-size: 1.1rem; }
+      .dur-btn { padding: 8px 14px; font-size: 0.78rem; }
+      .stats-widget { gap: 16px; padding: 8px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Pranayama</h1>
+      <p id="subtitle">Box Breathing — 4 · 4 · 4 · 4</p>
+    </div>
+
+    <div class="tech-row">
+      <button class="tech-btn selected" data-tech="box">Box Breathing</button>
+      <button class="tech-btn" data-tech="nadi">Nadi Sodhana</button>
+      <button class="tech-btn" data-tech="478">4 · 7 · 8</button>
+      <button class="tech-btn" data-tech="wimhof">Wim Hof</button>
+      <button class="tech-btn" data-tech="holo">Holotropic</button>
+    </div>
+
+    <div class="timing-wrap" id="timingWrap">
+      <div class="timing-lbl">Phase Timing — seconds</div>
+      <div class="timing-grid">
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--inhale)">Inhale</div>
+          <div class="stepper"><button class="step-btn" id="dec0">−</button><span class="step-val" id="tv0">4</span><button class="step-btn" id="inc0">+</button></div>
+        </div>
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--hold)">Hold</div>
+          <div class="stepper"><button class="step-btn" id="dec1">−</button><span class="step-val" id="tv1">4</span><button class="step-btn" id="inc1">+</button></div>
+        </div>
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--exhale)">Exhale</div>
+          <div class="stepper"><button class="step-btn" id="dec2">−</button><span class="step-val" id="tv2">4</span><button class="step-btn" id="inc2">+</button></div>
+        </div>
+        <div class="timing-item">
+          <div class="timing-name" style="color:var(--hold2)">Hold</div>
+          <div class="stepper"><button class="step-btn" id="dec3">−</button><span class="step-val" id="tv3">4</span><button class="step-btn" id="inc3">+</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box-wrap" id="boxWrap">
+      <svg class="box-svg" id="boxSvg" viewBox="0 0 260 260">
+        <!-- Box outline -->
+        <line class="box-side" x1="40" y1="40" x2="220" y2="40" />
+        <line class="box-side" x1="220" y1="40" x2="220" y2="220" />
+        <line class="box-side" x1="220" y1="220" x2="40" y2="220" />
+        <line class="box-side" x1="40" y1="220" x2="40" y2="40" />
+
+        <!-- Animated dot path: draws around the box -->
+        <!-- We use a polyline for the progress -->
+        <polyline class="box-progress" id="boxPath"
+          points="40,40 220,40 220,220 40,220 40,40"
+          stroke-dasharray="720"
+          stroke-dashoffset="720"
+          stroke="var(--inhale)" />
+
+        <!-- Moving dot -->
+        <circle id="moveDot" cx="40" cy="40" r="6" fill="var(--inhale)" filter="url(#glow)">
+        </circle>
+
+        <defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+      </svg>
+
+      <!-- Nadi Sodhana nostril SVG (hidden by default) -->
+      <svg class="box-svg hidden" id="noseSvg" viewBox="0 0 260 260">
+        <defs>
+          <filter id="nGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="rGlow" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- Cycle progress ring -->
+        <circle cx="130" cy="130" r="122" fill="none" stroke="#1c2028" stroke-width="1.5"/>
+        <circle id="progressArc" cx="130" cy="130" r="122" fill="none"
+          stroke="var(--inhale)" stroke-width="3" stroke-linecap="round"
+          stroke-dasharray="767" stroke-dashoffset="767"
+          transform="rotate(-90 130 130)" filter="url(#rGlow)"/>
+        <!-- Nose bridge -->
+        <path d="M 130,68 C 118,86 96,116 82,148 C 73,166 76,175 82,178"
+              fill="none" stroke="#252b35" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 130,68 C 142,86 164,116 178,148 C 187,166 184,175 178,178"
+              fill="none" stroke="#252b35" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 82,178 Q 130,195 178,178"
+              fill="none" stroke="#252b35" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- LEFT nostril -->
+        <ellipse cx="82" cy="192" rx="26" ry="18" fill="#0c0f13" stroke="#1c2028" stroke-width="1.5"/>
+        <ellipse id="leftGlow" cx="82" cy="192" rx="26" ry="18"
+          fill="#5ba4d92e" stroke="#5ba4d9" stroke-width="2.5" filter="url(#nGlow)" opacity="0"/>
+        <ellipse id="leftClosed" cx="82" cy="192" rx="26" ry="18" fill="#1a1e26" opacity="0"/>
+        <g id="leftX" opacity="0">
+          <line x1="70" y1="183" x2="94" y2="201" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+          <line x1="94" y1="183" x2="70" y2="201" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+        </g>
+        <text id="leftLabel" x="82" y="222" text-anchor="middle"
+          font-size="8" font-family="DM Sans,sans-serif" letter-spacing="2" fill="#4e4d4a">LEFT</text>
+        <g id="leftFlowIn" opacity="0">
+          <circle class="dot-flow-up" cx="82" cy="198" r="2.5" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="78" cy="195" r="2" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="86" cy="195" r="2" fill="#5ba4d9"/>
+        </g>
+        <g id="leftFlowOut" opacity="0">
+          <circle class="dot-flow-down" cx="82" cy="186" r="2.5" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="78" cy="189" r="2" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="86" cy="189" r="2" fill="#5bd9a4"/>
+        </g>
+        <!-- RIGHT nostril -->
+        <ellipse cx="178" cy="192" rx="26" ry="18" fill="#0c0f13" stroke="#1c2028" stroke-width="1.5"/>
+        <ellipse id="rightGlow" cx="178" cy="192" rx="26" ry="18"
+          fill="#5ba4d92e" stroke="#5ba4d9" stroke-width="2.5" filter="url(#nGlow)" opacity="0"/>
+        <ellipse id="rightClosed" cx="178" cy="192" rx="26" ry="18" fill="#1a1e26" opacity="0"/>
+        <g id="rightX" opacity="0">
+          <line x1="166" y1="183" x2="190" y2="201" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+          <line x1="190" y1="183" x2="166" y2="201" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round"/>
+        </g>
+        <text id="rightLabel" x="178" y="222" text-anchor="middle"
+          font-size="8" font-family="DM Sans,sans-serif" letter-spacing="2" fill="#4e4d4a">RIGHT</text>
+        <g id="rightFlowIn" opacity="0">
+          <circle class="dot-flow-up" cx="178" cy="198" r="2.5" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="174" cy="195" r="2" fill="#5ba4d9"/>
+          <circle class="dot-flow-up" cx="182" cy="195" r="2" fill="#5ba4d9"/>
+        </g>
+        <g id="rightFlowOut" opacity="0">
+          <circle class="dot-flow-down" cx="178" cy="186" r="2.5" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="174" cy="189" r="2" fill="#5bd9a4"/>
+          <circle class="dot-flow-down" cx="182" cy="189" r="2" fill="#5bd9a4"/>
+        </g>
+      </svg>
+
+      <!-- 4-7-8 breathing orb SVG (hidden by default) -->
+      <svg class="box-svg hidden" id="orbSvg" viewBox="0 0 260 260">
+        <defs>
+          <filter id="orbGF" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="10" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="orbRF" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <circle cx="130" cy="130" r="122" fill="none" stroke="#1c2028" stroke-width="1.5"/>
+        <circle id="orbProgressArc" cx="130" cy="130" r="122" fill="none"
+          stroke="var(--inhale)" stroke-width="3" stroke-linecap="round"
+          stroke-dasharray="767" stroke-dashoffset="767"
+          transform="rotate(-90 130 130)" filter="url(#orbRF)"/>
+        <circle id="orbHalo" cx="130" cy="130" r="68" fill="#5ba4d910" stroke="none" filter="url(#orbGF)"/>
+        <circle id="breathOrb" cx="130" cy="130" r="68" fill="#5ba4d918" stroke="#5ba4d9" stroke-width="1.5"/>
+      </svg>
+
+      <div class="box-center">
+        <div class="breath-circle" id="breathCircle"></div>
+        <div class="phase-text" id="phaseText">Ready</div>
+        <div class="count-text" id="countText">4</div>
+        <div class="guide-text hidden" id="guideText"></div>
+        <div class="cycle-text" id="cycleText"></div>
+        <div class="round-text hidden" id="roundText"></div>
+      </div>
+    </div>
+
+    <div class="total-bar-wrap hidden" id="totalBarWrap">
+      <div class="total-bar-label">
+        <span id="elapsed">0:00</span>
+        <span id="totalTime">0:00</span>
+      </div>
+      <div class="total-bar-track">
+        <div class="total-bar" id="totalBar"></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--inhale)"></div>Inhale</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--hold)"></div>Hold</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--exhale)"></div>Exhale</div>
+      <div class="legend-item" id="legendHold2"><div class="legend-dot" style="background:var(--hold2)"></div>Hold</div>
+    </div>
+
+    <div class="options" id="options">
+      <label>Session Duration</label>
+      <div class="dur-row">
+        <button class="dur-btn" data-min="2">2 min</button>
+        <button class="dur-btn selected" data-min="5">5 min</button>
+        <button class="dur-btn" data-min="10">10 min</button>
+        <button class="dur-btn" data-min="15">15 min</button>
+        <button class="dur-btn" data-min="20">20 min</button>
+      </div>
+    </div>
+
+    <div class="toggles-wrap">
+      <label class="toggle-row">
+        <span>Sound cues</span>
+        <input type="checkbox" id="soundToggle" checked>
+        <div class="toggle-track"></div>
+      </label>
+      <label class="toggle-row">
+        <span>Voice guide</span>
+        <input type="checkbox" id="voiceToggle" checked>
+        <div class="toggle-track"></div>
+      </label>
+    </div>
+
+    <div class="stats-widget">
+      <div class="stat-item"><div class="stat-val" id="statSessions">0</div><div class="stat-lbl">Sessions</div></div>
+      <div class="stat-item"><div class="stat-val" id="statStreak">0</div><div class="stat-lbl">Day streak 🔥</div></div>
+    </div>
+
+    <button class="start-btn" id="startBtn">Begin</button>
+  </div>
+
+  <div class="modal-overlay" id="safetyModal">
+    <div class="modal-box">
+      <h3>⚠ Safety Notice</h3>
+      <p id="safetyText"></p>
+      <button class="modal-ok" id="modalOk">I understand</button>
+      <button class="modal-cancel" id="modalCancel">Go back</button>
+    </div>
+  </div>
+
+  <script>
+    // ── Audio ──────────────────────────────────────────────────────────────
+    let audioCtx = null;
+    function getCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function playTick() {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(600, t);
+      g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.15);
+    }
+    function playPhaseChange(freq) {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.5);
+    }
+    function playGong() {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.35, t); master.gain.exponentialRampToValueAtTime(0.001, t + 4);
+      master.connect(ctx.destination);
+      [130, 195, 260, 390].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.3 / (i + 1), t); g.gain.exponentialRampToValueAtTime(0.001, t + 3.5);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t + 4);
+      });
+    }
+
+    function playWhoosh(dir = 'in') {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const dur = dir === 'in' ? 0.28 : 0.34;
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass'; filt.Q.value = 0.7;
+      if (dir === 'in') {
+        filt.frequency.setValueAtTime(350, t);
+        filt.frequency.exponentialRampToValueAtTime(2800, t + 0.18);
+      } else {
+        filt.frequency.setValueAtTime(2200, t);
+        filt.frequency.exponentialRampToValueAtTime(280, t + 0.26);
+      }
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(dir === 'in' ? 0.22 : 0.17, t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+      src.start(t); src.stop(t + dur);
+    }
+    const boxPhases = [
+      { name: 'Inhale', hex: '#5ba4d9', freq: 396, dur: 4 },
+      { name: 'Hold',   hex: '#a78bfa', freq: 528, dur: 4 },
+      { name: 'Exhale', hex: '#5bd9a4', freq: 432, dur: 4 },
+      { name: 'Hold',   hex: '#d9a45b', freq: 480, dur: 4 },
+    ];
+    // Nadi Sodhana: inhale-left → hold → exhale-right → inhale-right → hold → exhale-left
+    const nadiPhases = [
+      { name: 'Inhale', guide: 'Left nostril',  hex: '#5ba4d9', open: 'left',  flow: 'in',  freq: 396, dur: 4 },
+      { name: 'Hold',   guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,  freq: 528, dur: 4 },
+      { name: 'Exhale', guide: 'Right nostril', hex: '#5bd9a4', open: 'right', flow: 'out', freq: 432, dur: 4 },
+      { name: 'Inhale', guide: 'Right nostril', hex: '#5ba4d9', open: 'right', flow: 'in',  freq: 396, dur: 4 },
+      { name: 'Hold',   guide: 'Both closed',   hex: '#a78bfa', open: 'none',  flow: null,  freq: 528, dur: 4 },
+      { name: 'Exhale', guide: 'Left nostril',  hex: '#5bd9a4', open: 'left',  flow: 'out', freq: 432, dur: 4 },
+    ];
+    // 4-7-8: inhale 4s → hold 7s → exhale 8s
+    const breathPhases = [
+      { name: 'Inhale', hex: '#5ba4d9', freq: 396, dur: 4 },
+      { name: 'Hold',   hex: '#a78bfa', freq: 528, dur: 7 },
+      { name: 'Exhale', hex: '#5bd9a4', freq: 432, dur: 8 },
+    ];
+    const holoPhases = [
+      { name: 'Inhale', hex: '#5ba4d9', freq: 396, dur: 3 },
+      { name: 'Exhale', hex: '#5bd9a4', freq: 432, dur: 3 },
+    ];
+    const RING_CIRC = 2 * Math.PI * 122; // ~767
+
+    // ── localStorage stats ─────────────────────────────────────────────────
+    function loadStats() {
+      try { return JSON.parse(localStorage.getItem('pranayama_stats') || '{}'); } catch { return {}; }
+    }
+    function saveStats(s) { try { localStorage.setItem('pranayama_stats', JSON.stringify(s)); } catch {} }
+    function renderStats() {
+      const s = loadStats();
+      document.getElementById('statSessions').textContent = s.sessions || 0;
+      document.getElementById('statStreak').textContent = s.streak || 0;
+    }
+    function incrementSession() {
+      const s = loadStats();
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      s.sessions = (s.sessions || 0) + 1;
+      s.streak = s.lastDate === today ? (s.streak || 1)
+               : s.lastDate === yesterday ? (s.streak || 0) + 1 : 1;
+      s.lastDate = today;
+      saveStats(s);
+      renderStats();
+    }
+
+    // ── Voice guidance (Web Audio API — works on iOS) ─────────────────────
+    const VOICE_KEY_MAP = { 'inhale': 'inhale', 'exhale': 'exhale', 'hold': 'hold' };
+    let voiceCtx = null;
+    const voiceBuffers = {};
+
+    async function initVoiceAudio() {
+      if (voiceCtx) { if (voiceCtx.state === 'suspended') await voiceCtx.resume(); return; }
+      voiceCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const FILE_MAP = {
+        inhale: 'inhale.mp3.m4a', exhale: 'exhale.mp3.m4a', hold: 'hold.mp3.m4a',
+        inhale_left: 'inhale_left.m4a', inhale_right: 'inhale_right.m4a',
+        exhale_left: 'exhale_left.m4a', exhale_right: 'exhale_right.m4a',
+      };
+      await Promise.all(Object.entries(FILE_MAP).map(async ([key, file]) => {
+        try {
+          const res = await fetch(file);
+          const buf = await res.arrayBuffer();
+          voiceBuffers[key] = await voiceCtx.decodeAudioData(buf);
+        } catch {}
+      }));
+    }
+
+    function playVoice(label) {
+      if (!document.getElementById('voiceToggle').checked) return;
+      if (!voiceCtx) return;
+      const key = VOICE_KEY_MAP[label.toLowerCase()] ?? label.toLowerCase();
+      if (!voiceBuffers[key]) return;
+      const src = voiceCtx.createBufferSource();
+      src.buffer = voiceBuffers[key];
+      const vol = voiceCtx.createGain();
+      vol.gain.value = 0.62;
+      src.connect(vol); vol.connect(voiceCtx.destination);
+      src.start(0);
+    }
+
+    // ── Nadi background music ─────────────────────────────────────────────
+    let nadiMusicNodes = null;
+
+    function startNadiMusic() {
+      if (!document.getElementById('soundToggle').checked) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0, t);
+      master.gain.linearRampToValueAtTime(0.07, t + 4); // 4s fade in
+      master.connect(ctx.destination);
+      // Layered drone: 108Hz fundamental + octaves + fifth, with 216/217 beating
+      [
+        { f: 108,  vol: 0.60, lfoRate: 0.11 },
+        { f: 216,  vol: 0.38, lfoRate: 0.17 },
+        { f: 217,  vol: 0.28, lfoRate: 0.19 }, // 1Hz beat against 216
+        { f: 324,  vol: 0.22, lfoRate: 0.23 }, // perfect fifth
+        { f: 432,  vol: 0.18, lfoRate: 0.29 }, // second octave
+      ].forEach(({ f, vol, lfoRate }) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        const lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = f; g.gain.value = vol;
+        lfo.frequency.value = lfoRate; lfoG.gain.value = f * 0.0018;
+        lfo.connect(lfoG); lfoG.connect(osc.frequency);
+        osc.connect(g); g.connect(master);
+        lfo.start(t); osc.start(t);
+        master._nodes = master._nodes || [];
+        master._nodes.push(osc, lfo);
+      });
+      nadiMusicNodes = master;
+    }
+
+    function stopNadiMusic() {
+      if (!nadiMusicNodes) return;
+      const ctx = getCtx(), t = ctx.currentTime;
+      nadiMusicNodes.gain.cancelScheduledValues(t);
+      nadiMusicNodes.gain.setValueAtTime(nadiMusicNodes.gain.value, t);
+      nadiMusicNodes.gain.linearRampToValueAtTime(0, t + 2.5);
+      const nodes = nadiMusicNodes._nodes || [];
+      setTimeout(() => nodes.forEach(n => { try { n.stop(); } catch {} }), 3000);
+      nadiMusicNodes = null;
+    }
+
+    // ── Box path geometry ──────────────────────────────────────────────────
+    const sides = [
+      { x1: 40, y1: 40, x2: 220, y2: 40 },
+      { x1: 220, y1: 40, x2: 220, y2: 220 },
+      { x1: 220, y1: 220, x2: 40, y2: 220 },
+      { x1: 40, y1: 220, x2: 40, y2: 40 },
+    ];
+
+    // ── DOM refs ───────────────────────────────────────────────────────────
+    const phaseText    = document.getElementById('phaseText');
+    const countText    = document.getElementById('countText');
+    const guideText    = document.getElementById('guideText');
+    const cycleText    = document.getElementById('cycleText');
+    const breathCircle = document.getElementById('breathCircle');
+    const boxPath      = document.getElementById('boxPath');
+    const moveDot      = document.getElementById('moveDot');
+    const startBtn     = document.getElementById('startBtn');
+    const optionsEl    = document.getElementById('options');
+    const totalBarWrap = document.getElementById('totalBarWrap');
+    const totalBar     = document.getElementById('totalBar');
+    const elapsedEl    = document.getElementById('elapsed');
+    const totalTimeEl  = document.getElementById('totalTime');
+    const boxWrap      = document.getElementById('boxWrap');
+    const boxSvg       = document.getElementById('boxSvg');
+    const noseSvg      = document.getElementById('noseSvg');
+    const subtitleEl   = document.getElementById('subtitle');
+    const legendHold2  = document.getElementById('legendHold2');
+    const progressArc  = document.getElementById('progressArc');
+    const leftGlow     = document.getElementById('leftGlow');
+    const rightGlow    = document.getElementById('rightGlow');
+    const leftClosed   = document.getElementById('leftClosed');
+    const rightClosed  = document.getElementById('rightClosed');
+    const leftX        = document.getElementById('leftX');
+    const rightX       = document.getElementById('rightX');
+    const leftLabel    = document.getElementById('leftLabel');
+    const rightLabel   = document.getElementById('rightLabel');
+    const leftFlowIn   = document.getElementById('leftFlowIn');
+    const leftFlowOut  = document.getElementById('leftFlowOut');
+    const rightFlowIn  = document.getElementById('rightFlowIn');
+    const rightFlowOut = document.getElementById('rightFlowOut');
+    const timingWrap   = document.getElementById('timingWrap');
+    const orbSvg       = document.getElementById('orbSvg');
+    const orbProgressArc = document.getElementById('orbProgressArc');
+    const breathOrb    = document.getElementById('breathOrb');
+    const orbHalo      = document.getElementById('orbHalo');
+    const roundText   = document.getElementById('roundText');
+    const safetyModal = document.getElementById('safetyModal');
+    const safetyText  = document.getElementById('safetyText');
+
+    let selectedMinutes = 5;
+    let running = false;
+    let animFrame = null;
+    let currentTech = 'box';
+    const boxTimings = [4, 4, 4, 4]; // inhale, hold, exhale, hold — user-adjustable
+    const MIN_DUR = 2, MAX_DUR = 12;
+
+    // ── Duration buttons ───────────────────────────────────────────────────
+    document.querySelectorAll('.dur-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (running) return;
+        document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedMinutes = parseInt(btn.dataset.min);
+      });
+    });
+
+    // ── Box timing steppers ────────────────────────────────────────────────
+    function updateBoxSubtitle() {
+      subtitleEl.textContent = `Box Breathing — ${boxTimings.join(' · ')}`;
+    }
+
+    [0, 1, 2, 3].forEach(i => {
+      document.getElementById(`dec${i}`).addEventListener('click', () => {
+        if (running || boxTimings[i] <= MIN_DUR) return;
+        boxTimings[i]--;
+        document.getElementById(`tv${i}`).textContent = boxTimings[i];
+        document.getElementById(`dec${i}`).disabled = boxTimings[i] <= MIN_DUR;
+        document.getElementById(`inc${i}`).disabled = false;
+        updateBoxSubtitle();
+      });
+      document.getElementById(`inc${i}`).addEventListener('click', () => {
+        if (running || boxTimings[i] >= MAX_DUR) return;
+        boxTimings[i]++;
+        document.getElementById(`tv${i}`).textContent = boxTimings[i];
+        document.getElementById(`inc${i}`).disabled = boxTimings[i] >= MAX_DUR;
+        document.getElementById(`dec${i}`).disabled = false;
+        updateBoxSubtitle();
+      });
+    });
+
+    function switchTechnique(tech) {
+      currentTech = tech;
+      document.querySelectorAll('.tech-btn').forEach(b =>
+        b.classList.toggle('selected', b.dataset.tech === tech));
+
+      // Reset all SVGs and modes
+      boxSvg.classList.add('hidden');
+      noseSvg.classList.add('hidden');
+      orbSvg.classList.add('hidden');
+      boxWrap.classList.remove('nadi-mode');
+      breathCircle.style.display = 'none';
+      guideText.classList.add('hidden');
+      legendHold2.classList.add('hidden');
+      timingWrap.classList.add('hidden');
+      roundText.classList.add('hidden');
+      roundText.textContent = '';
+
+      if (tech === 'box') {
+        boxSvg.classList.remove('hidden');
+        updateBoxSubtitle();
+        legendHold2.classList.remove('hidden');
+        breathCircle.style.display = '';
+        timingWrap.classList.remove('hidden');
+        resetBoxVisual();
+      } else if (tech === 'nadi') {
+        noseSvg.classList.remove('hidden');
+        boxWrap.classList.add('nadi-mode');
+        subtitleEl.textContent = 'Nadi Sodhana — Alternate Nostril';
+        guideText.classList.remove('hidden');
+        resetNadiVisual();
+      } else if (tech === 'wimhof') {
+        orbSvg.classList.remove('hidden');
+        subtitleEl.textContent = 'Wim Hof — 3 Rounds';
+        roundText.classList.remove('hidden');
+        resetOrbVisual();
+      } else if (tech === 'holo') {
+        orbSvg.classList.remove('hidden');
+        subtitleEl.textContent = 'Holotropic — Circular Breathing';
+        resetOrbVisual();
+      } else {
+        orbSvg.classList.remove('hidden');
+        subtitleEl.textContent = '4 · 7 · 8 Breathing';
+        resetOrbVisual();
+      }
+
+      phaseText.textContent = 'Ready';
+      phaseText.style.color = 'var(--text)';
+      countText.textContent = '—';
+      countText.style.color = 'var(--text)';
+      guideText.textContent = '';
+      cycleText.textContent = '';
+    }
+
+    // ── Box visual helpers ─────────────────────────────────────────────────
+    function setDotPosition(sideIndex, fraction) {
+      const s = sides[sideIndex];
+      moveDot.setAttribute('cx', s.x1 + (s.x2 - s.x1) * fraction);
+      moveDot.setAttribute('cy', s.y1 + (s.y2 - s.y1) * fraction);
+    }
+    function setBoxProgress(sideIndex, fraction) {
+      boxPath.style.strokeDashoffset = 720 - (sideIndex * 180 + fraction * 180);
+    }
+    function resetBoxVisual() {
+      boxPath.style.strokeDashoffset = 720;
+      moveDot.setAttribute('cx', 40); moveDot.setAttribute('cy', 40);
+      moveDot.setAttribute('fill', 'var(--inhale)');
+      boxPath.setAttribute('stroke', 'var(--inhale)');
+    }
+
+    // ── Nadi visual helpers ────────────────────────────────────────────────
+    const nadiEls = [leftGlow, rightGlow, leftClosed, rightClosed, leftX, rightX,
+                     leftFlowIn, leftFlowOut, rightFlowIn, rightFlowOut];
+
+    function applyNostrilState(p, phaseFrac) {
+      nadiEls.forEach(el => el.setAttribute('opacity', '0'));
+      leftLabel.setAttribute('fill', '#4e4d4a');
+      rightLabel.setAttribute('fill', '#4e4d4a');
+
+      const scale = p.name === 'Inhale' ? 1 + phaseFrac * 0.45
+                  : p.name === 'Exhale' ? 1.45 - phaseFrac * 0.45
+                  : 1.45;
+
+      if (p.open === 'left') {
+        leftGlow.setAttribute('fill', p.hex + '2e');
+        leftGlow.setAttribute('stroke', p.hex);
+        leftGlow.setAttribute('opacity', '1');
+        leftGlow.style.transform = `scale(${scale})`;
+        leftLabel.setAttribute('fill', p.hex);
+        rightClosed.setAttribute('opacity', '0.65');
+        rightX.setAttribute('opacity', '1');
+        if (p.flow === 'in')  leftFlowIn.setAttribute('opacity', '1');
+        if (p.flow === 'out') leftFlowOut.setAttribute('opacity', '1');
+      } else if (p.open === 'right') {
+        rightGlow.setAttribute('fill', p.hex + '2e');
+        rightGlow.setAttribute('stroke', p.hex);
+        rightGlow.setAttribute('opacity', '1');
+        rightGlow.style.transform = `scale(${scale})`;
+        rightLabel.setAttribute('fill', p.hex);
+        leftClosed.setAttribute('opacity', '0.65');
+        leftX.setAttribute('opacity', '1');
+        if (p.flow === 'in')  rightFlowIn.setAttribute('opacity', '1');
+        if (p.flow === 'out') rightFlowOut.setAttribute('opacity', '1');
+      } else {
+        leftClosed.setAttribute('opacity', '0.65');
+        rightClosed.setAttribute('opacity', '0.65');
+        leftX.setAttribute('opacity', '1');
+        rightX.setAttribute('opacity', '1');
+      }
+    }
+
+    function resetNadiVisual() {
+      nadiEls.forEach(el => el.setAttribute('opacity', '0'));
+      leftLabel.setAttribute('fill', '#4e4d4a');
+      rightLabel.setAttribute('fill', '#4e4d4a');
+      leftGlow.style.transform = '';
+      rightGlow.style.transform = '';
+      progressArc.style.strokeDashoffset = RING_CIRC;
+    }
+
+    // ── 4-7-8 orb visual ──────────────────────────────────────────────────
+    function applyOrbState(p, phaseFrac, cycleTime, CYCLE) {
+      const minS = 0.38, maxS = 1.28;
+      const scale = p.name === 'Inhale' ? minS + phaseFrac * (maxS - minS)
+                  : p.name === 'Hold'   ? maxS
+                  : maxS - phaseFrac * (maxS - minS);
+      breathOrb.style.transform = `scale(${scale})`;
+      breathOrb.setAttribute('fill', p.hex + '1e');
+      breathOrb.setAttribute('stroke', p.hex);
+      orbHalo.style.transform = `scale(${scale * 1.4})`;
+      orbHalo.setAttribute('fill', p.hex + '0c');
+      orbProgressArc.style.strokeDashoffset = RING_CIRC * (1 - cycleTime / CYCLE);
+      orbProgressArc.setAttribute('stroke', p.hex);
+    }
+    function resetOrbVisual() {
+      breathOrb.style.transform = '';
+      orbHalo.style.transform = '';
+      breathOrb.setAttribute('fill', '#5ba4d918');
+      breathOrb.setAttribute('stroke', '#5ba4d9');
+      orbHalo.setAttribute('fill', '#5ba4d910');
+      orbProgressArc.style.strokeDashoffset = RING_CIRC;
+      orbProgressArc.setAttribute('stroke', 'var(--inhale)');
+    }
+
+    // ── Shared helpers ─────────────────────────────────────────────────────
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    // ── Session ────────────────────────────────────────────────────────────
+    async function startSession() {
+      running = true;
+      startBtn.textContent = 'Stop';
+      optionsEl.style.opacity = '0.3';
+      optionsEl.style.pointerEvents = 'none';
+      timingWrap.style.opacity = '0.3';
+      timingWrap.style.pointerEvents = 'none';
+      totalBarWrap.classList.remove('hidden');
+
+      if (document.getElementById('voiceToggle').checked) await initVoiceAudio();
+      if (currentTech === 'wimhof') { startWimhof(); return; }
+
+      const phases = currentTech === 'box'
+        ? boxPhases.map((p, i) => ({ ...p, dur: boxTimings[i] }))
+        : currentTech === 'nadi' ? nadiPhases
+        : currentTech === 'holo' ? holoPhases
+        : breathPhases;
+
+      // Pre-compute cumulative phase start times for variable-duration support
+      const cumStarts = [];
+      let acc = 0;
+      phases.forEach(p => { cumStarts.push(acc); acc += p.dur; });
+      const CYCLE = acc;
+
+      const totalSecs = selectedMinutes * 60;
+      totalTimeEl.textContent = formatTime(totalSecs);
+      const startTime = performance.now();
+      let lastCount = -1, lastPhase = -1;
+
+      if (currentTech === 'nadi') startNadiMusic();
+      playGong();
+
+      function tick() {
+        const elapsedSecs = (performance.now() - startTime) / 1000;
+        if (elapsedSecs >= totalSecs) { endSession(); return; }
+
+        totalBar.style.width = (elapsedSecs / totalSecs * 100) + '%';
+        elapsedEl.textContent = formatTime(elapsedSecs);
+
+        const cycleTime = elapsedSecs % CYCLE;
+        let phaseIndex = phases.length - 1;
+        for (let i = 0; i < phases.length - 1; i++) {
+          if (cycleTime < cumStarts[i + 1]) { phaseIndex = i; break; }
+        }
+        const phaseTime    = cycleTime - cumStarts[phaseIndex];
+        const phaseDur     = phases[phaseIndex].dur;
+        const phaseFrac    = phaseTime / phaseDur;
+        const currentCount = phaseDur - Math.floor(phaseTime);
+        const cycleNum     = Math.floor(elapsedSecs / CYCLE) + 1;
+        const p            = phases[phaseIndex];
+
+        phaseText.textContent = p.name;
+        phaseText.style.color = p.hex;
+        countText.textContent = currentCount;
+        countText.style.color = p.hex;
+        cycleText.textContent = `Cycle ${cycleNum}`;
+        totalBar.style.background = p.hex;
+
+        if (currentTech === 'box') {
+          breathCircle.style.background = p.hex;
+          breathCircle.className = 'breath-circle ' +
+            ['inhale','hold','exhale','hold2'][phaseIndex];
+          moveDot.setAttribute('fill', p.hex);
+          boxPath.setAttribute('stroke', p.hex);
+          setDotPosition(phaseIndex, phaseFrac);
+          setBoxProgress(phaseIndex, phaseFrac);
+        } else if (currentTech === 'nadi') {
+          guideText.textContent = p.guide;
+          guideText.style.color = p.hex + 'bb';
+          applyNostrilState(p, phaseFrac);
+          progressArc.style.strokeDashoffset = RING_CIRC * (1 - cycleTime / CYCLE);
+          progressArc.setAttribute('stroke', p.hex);
+        } else {
+          applyOrbState(p, phaseFrac, cycleTime, CYCLE);
+        }
+
+        if (phaseIndex !== lastPhase) {
+          playPhaseChange(p.freq);
+          if (currentTech === 'nadi') {
+            const nKey = p.flow === 'in'  ? `inhale_${p.open}`
+                       : p.flow === 'out' ? `exhale_${p.open}`
+                       : 'hold';
+            playVoice(nKey);
+          } else {
+            playVoice(p.name);
+          }
+          lastPhase = phaseIndex;
+        }
+        if (currentCount !== lastCount) { if (lastCount !== -1) playTick(); lastCount = currentCount; }
+
+        animFrame = requestAnimationFrame(tick);
+      }
+      animFrame = requestAnimationFrame(tick);
+    }
+
+    function endSession() {
+      running = false;
+      cancelAnimationFrame(animFrame);
+      if (currentTech === 'nadi') stopNadiMusic();
+      incrementSession();
+      playGong(); setTimeout(playGong, 1500); setTimeout(playGong, 3000);
+      phaseText.textContent = 'Complete';
+      phaseText.style.color = 'var(--exhale)';
+      countText.textContent = '🙏';
+      guideText.textContent = '';
+      cycleText.textContent = currentTech === 'wimhof' ? '3 rounds' : `${selectedMinutes} minutes`;
+      totalBar.style.width = '100%';
+      startBtn.textContent = 'Begin';
+      optionsEl.style.opacity = '1'; optionsEl.style.pointerEvents = 'auto';
+      timingWrap.style.opacity = ''; timingWrap.style.pointerEvents = '';
+      if (currentTech === 'box') resetBoxVisual();
+      else if (currentTech === 'nadi') { resetNadiVisual(); progressArc.style.strokeDashoffset = 0; }
+      else if (currentTech !== 'wimhof') { resetOrbVisual(); orbProgressArc.style.strokeDashoffset = 0; }
+      if (currentTech === 'wimhof') { roundText.textContent = '3 / 3 complete ✓'; }
+    }
+
+    function stopSession() {
+      running = false;
+      cancelAnimationFrame(animFrame);
+      if (currentTech === 'nadi') stopNadiMusic();
+      phaseText.textContent = 'Ready';
+      phaseText.style.color = 'var(--text)';
+      countText.textContent = '—';
+      countText.style.color = 'var(--text)';
+      guideText.textContent = '';
+      cycleText.textContent = '';
+      startBtn.textContent = 'Begin';
+      optionsEl.style.opacity = '1'; optionsEl.style.pointerEvents = 'auto';
+      timingWrap.style.opacity = ''; timingWrap.style.pointerEvents = '';
+      totalBarWrap.classList.add('hidden');
+      totalBar.style.width = '0%';
+      if (currentTech === 'box') resetBoxVisual();
+      else if (currentTech === 'nadi') resetNadiVisual();
+      else resetOrbVisual();
+      if (currentTech === 'wimhof') { roundText.textContent = ''; }
+    }
+
+    // ── Wim Hof engine ────────────────────────────────────────────────────
+    function startWimhof() {
+      const TOTAL_ROUNDS = 3;
+      const BREATH_COUNT = 30;
+      const BREATH_DUR   = 1.5;  // seconds per breath (faster than before)
+      const HOLD_DUR     = 90;
+      const RECOV_DUR    = 15;
+
+      let round = 1;
+      let subPhase = 'breathe';
+      let subStart = performance.now();
+      let lastBreathNum = 0;
+      let lastIsIn = true;
+      const totalSecs = TOTAL_ROUNDS * (BREATH_COUNT * BREATH_DUR + HOLD_DUR + RECOV_DUR);
+      const globalStart = performance.now();
+
+      totalTimeEl.textContent = formatTime(totalSecs);
+      playGong();
+
+      function wimTick() {
+        if (!running) return;
+        const now = performance.now();
+        const elapsed    = (now - globalStart) / 1000;
+        const subElapsed = (now - subStart) / 1000;
+
+        totalBar.style.width = Math.min(elapsed / totalSecs * 100, 100) + '%';
+        elapsedEl.textContent = formatTime(elapsed);
+
+        if (subPhase === 'breathe') {
+          const breathNum  = Math.min(Math.floor(subElapsed / BREATH_DUR) + 1, BREATH_COUNT);
+          const breathFrac = (subElapsed % BREATH_DUR) / BREATH_DUR; // 0→1 per breath
+          const isIn       = breathFrac < 0.5;
+          const t          = isIn ? breathFrac * 2 : (breathFrac - 0.5) * 2; // 0→1 per half
+          // sine easing: fast expand on inhale, fast collapse on exhale
+          const s = isIn
+            ? 0.22 + 1.25 * Math.sin(t * Math.PI / 2)   // 0.22 → 1.47 easeOut
+            : 0.22 + 1.25 * Math.cos(t * Math.PI / 2);  // 1.47 → 0.22 easeIn
+          const hex = isIn ? '#5ba4d9' : '#5bd9a4';
+          phaseText.textContent = isIn ? 'Inhale' : 'Exhale';
+          phaseText.style.color = hex;
+          countText.textContent = breathNum;
+          countText.style.color = hex;
+          roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Breath ${breathNum} / ${BREATH_COUNT}`;
+          totalBar.style.background = hex;
+          breathOrb.style.transform = `scale(${s})`;
+          breathOrb.setAttribute('fill', hex + '22'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${s * 1.35})`;
+          orbHalo.setAttribute('fill', hex + '0e');
+          if (breathNum !== lastBreathNum) {
+            playWhoosh('in');
+            lastBreathNum = breathNum;
+            lastIsIn = true;
+          } else if (!isIn && lastIsIn) {
+            playWhoosh('out');
+            lastIsIn = false;
+          }
+          if (subElapsed >= BREATH_COUNT * BREATH_DUR) {
+            subPhase = 'hold'; subStart = performance.now();
+            playPhaseChange(528);
+          }
+        } else if (subPhase === 'hold') {
+          const hex   = '#a78bfa';
+          const pulse = 0.32 + 0.06 * Math.sin(subElapsed * Math.PI * 0.35); // slow eerie pulse
+          phaseText.textContent = 'Hold';
+          phaseText.style.color = hex;
+          countText.textContent = Math.floor(subElapsed);
+          countText.style.color = hex;
+          roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Retention`;
+          totalBar.style.background = hex;
+          breathOrb.style.transform = `scale(${pulse})`;
+          breathOrb.setAttribute('fill', hex + '22'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${pulse * 1.35})`;
+          orbHalo.setAttribute('fill', hex + '0e');
+          if (subElapsed >= HOLD_DUR) {
+            subPhase = 'recover'; subStart = performance.now();
+            playPhaseChange(396);
+          }
+        } else {
+          const hex      = '#5bd9a4';
+          const recovFrac = Math.min(subElapsed / RECOV_DUR, 1);
+          const s        = 0.28 + 1.15 * Math.sin(recovFrac * Math.PI / 2); // 0.28 → 1.43 easeOut
+          phaseText.textContent = 'Inhale & Hold';
+          phaseText.style.color = hex;
+          countText.textContent = Math.max(Math.ceil(RECOV_DUR - subElapsed), 1);
+          countText.style.color = hex;
+          roundText.textContent = `Round ${round} / ${TOTAL_ROUNDS} · Recovery`;
+          totalBar.style.background = hex;
+          breathOrb.style.transform = `scale(${s})`;
+          breathOrb.setAttribute('fill', hex + '22'); breathOrb.setAttribute('stroke', hex);
+          orbHalo.style.transform = `scale(${s * 1.35})`;
+          orbHalo.setAttribute('fill', hex + '0e');
+          if (subElapsed >= RECOV_DUR) {
+            if (round >= TOTAL_ROUNDS) { endSession(); return; }
+            round++;
+            subPhase = 'breathe'; subStart = performance.now();
+            lastBreathNum = 0; lastIsIn = true;
+            playPhaseChange(396);
+          }
+        }
+        animFrame = requestAnimationFrame(wimTick);
+      }
+      animFrame = requestAnimationFrame(wimTick);
+    }
+
+    // ── Safety modal wiring ────────────────────────────────────────────────
+    const SAFETY_MSGS = {
+      wimhof: 'Wim Hof breathing involves rapid hyperventilation and extended breath retention. Never practice in water, while driving, or standing. Stop if you feel dizzy. Not suitable during pregnancy or with heart conditions.',
+      holo:   'Holotropic breathing involves sustained rapid breathing which may cause tingling, lightheadedness, or altered states. Practice only seated or lying down in a safe environment. Consult a doctor if you have heart, lung, or neurological conditions.',
+    };
+    let pendingTech = null;
+    let prevTech = 'box';
+
+    document.querySelectorAll('.tech-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (running) return;
+        const tech = btn.dataset.tech;
+        if (tech === 'wimhof' || tech === 'holo') {
+          pendingTech = tech;
+          safetyText.textContent = SAFETY_MSGS[tech];
+          safetyModal.classList.add('open');
+        } else {
+          prevTech = tech;
+          switchTechnique(tech);
+        }
+      });
+    });
+
+    document.getElementById('modalOk').addEventListener('click', () => {
+      safetyModal.classList.remove('open');
+      if (pendingTech) { prevTech = pendingTech; switchTechnique(pendingTech); pendingTech = null; }
+    });
+    document.getElementById('modalCancel').addEventListener('click', () => {
+      safetyModal.classList.remove('open');
+      if (prevTech) switchTechnique(prevTech);
+      pendingTech = null;
+    });
+
+    startBtn.addEventListener('click', () => {
+      if (running) stopSession(); else startSession();
+    });
+
+    renderStats();
+  </script>
+</body>
+</html>
